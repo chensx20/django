@@ -117,6 +117,17 @@ class AdminFormfieldForDBFieldTests(SimpleTestCase):
         self.assertFormfield(Band, 'members', widgets.FilteredSelectMultiple,
                              filter_vertical=['members'])
 
+    def test_formfield_overrides_m2m_filter_widget(self):
+        class BandAdmin(admin.ModelAdmin):
+            filter_vertical = ['members']
+
+        ma = BandAdmin(Band, admin.site)
+        custom_widget = forms.CheckboxSelectMultiple
+        formfield = ma.formfield_for_manytomany(
+            Band._meta.get_field('members'), request=None, widget=custom_widget
+        )
+        self.assertIs(formfield.widget.__class__, custom_widget)
+
     def test_formfield_overrides(self):
         self.assertFormfield(Event, 'start_date', forms.TextInput,
                              formfield_overrides={DateField: {'widget': forms.TextInput}})
