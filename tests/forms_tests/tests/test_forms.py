@@ -4043,6 +4043,16 @@ aria-describedby="id_age_error"></td></tr>""",
         self.assertIsNot(field2.fields, field.fields)
         self.assertIsNot(field2.fields[0].choices, field.fields[0].choices)
 
+    def test_field_deep_copy_error_messages(self):
+        field = CharField(error_messages={'required': 'Required message'})
+        field_copy = copy.deepcopy(field)
+
+        self.assertEqual(field_copy.error_messages, field.error_messages)
+        self.assertIsNot(field_copy.error_messages, field.error_messages)
+
+        field_copy.error_messages['required'] = 'Copied message'
+        self.assertEqual(field.error_messages['required'], 'Required message')
+
     def test_multivalue_initial_data(self):
         """
         #23674 -- invalid initial data should not break form.changed_data()
