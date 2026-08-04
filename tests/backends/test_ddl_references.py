@@ -1,5 +1,5 @@
 from django.db.backends.ddl_references import (
-    Columns, ForeignKeyName, IndexName, Statement, Table,
+    Columns, ForeignKeyName, IndexColumns, IndexName, Statement, Table,
 )
 from django.test import SimpleTestCase
 
@@ -55,6 +55,33 @@ class ColumnsTests(TableTests):
 
     def test_str(self):
         self.assertEqual(str(self.reference), 'FIRST_COLUMN, SECOND_COLUMN')
+
+    def test_str_suffix_spacing(self):
+        tests = (
+            (['headline'], [''], 'HEADLINE'),
+            (['headline'], ['DESC'], 'HEADLINE DESC'),
+            (['headline'], [' DESC '], 'HEADLINE DESC'),
+        )
+        for columns, suffixes, expected in tests:
+            with self.subTest(suffixes=suffixes):
+                reference = Columns('table', columns, lambda column: column.upper(), suffixes)
+                self.assertEqual(str(reference), expected)
+
+
+class IndexColumnsTests(SimpleTestCase):
+    def test_str_suffix_spacing(self):
+        tests = (
+            (['headline'], [''], [''], '"headline"'),
+            (['headline'], ['DESC'], [''], '"headline" DESC'),
+            (['headline'], [''], ['text_pattern_ops'], '"headline" text_pattern_ops'),
+            (['headline'], [' DESC '], [' text_pattern_ops '], '"headline" text_pattern_ops DESC'),
+        )
+        for columns, suffixes, opclasses, expected in tests:
+            with self.subTest(suffixes=suffixes, opclasses=opclasses):
+                reference = IndexColumns(
+                    'table', columns, lambda column: '"%s"' % column, suffixes, opclasses,
+                )
+                self.assertEqual(str(reference), expected)
 
 
 class IndexNameTests(ColumnsTests):
