@@ -15,10 +15,7 @@ from django.db import (
     DEFAULT_DB_ALIAS, DJANGO_VERSION_PICKLE_KEY, DatabaseError, connection,
     connections, router, transaction,
 )
-from django.db.models import (
-    NOT_PROVIDED, ExpressionWrapper, IntegerChoices, IntegerField, Max,
-    TextChoices, Value,
-)
+from django.db.models import NOT_PROVIDED, ExpressionWrapper, IntegerField, Max, Value
 from django.db.models.constants import LOOKUP_SEP
 from django.db.models.constraints import CheckConstraint, UniqueConstraint
 from django.db.models.deletion import CASCADE, Collector
@@ -48,19 +45,6 @@ class Deferred:
 
 
 DEFERRED = Deferred()
-
-
-def _normalize_field_value(field, value):
-    if value is None or not field.choices:
-        return value
-    choice_values = [choice for choice, _ in field.flatchoices]
-    if value not in choice_values:
-        return value
-    if isinstance(value, TextChoices):
-        return value.value
-    if isinstance(value, IntegerChoices):
-        return value.value
-    return value
 
 
 def subclass_exception(name, bases, module, attached_to):
@@ -445,14 +429,14 @@ class Model(metaclass=ModelBase):
             for val, field in zip(args, fields_iter):
                 if val is _DEFERRED:
                     continue
-                _setattr(self, field.attname, _normalize_field_value(field, val))
+                _setattr(self, field.attname, val)
         else:
             # Slower, kwargs-ready version.
             fields_iter = iter(opts.fields)
             for val, field in zip(args, fields_iter):
                 if val is _DEFERRED:
                     continue
-                _setattr(self, field.attname, _normalize_field_value(field, val))
+                _setattr(self, field.attname, val)
                 kwargs.pop(field.name, None)
 
         # Now we're left with the unprocessed fields that *must* come from
@@ -496,7 +480,7 @@ class Model(metaclass=ModelBase):
                     _setattr(self, field.name, rel_obj)
             else:
                 if val is not _DEFERRED:
-                    _setattr(self, field.attname, _normalize_field_value(field, val))
+                    _setattr(self, field.attname, val)
 
         if kwargs:
             property_names = opts._property_names

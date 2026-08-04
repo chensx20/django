@@ -262,6 +262,11 @@ class ChoicesModelTests(TransactionTestCase):
     def test_textchoices_model_instance_normalization(self):
         class Student(models.Model):
             year_in_school = models.CharField(max_length=2, choices=YearInSchool.choices)
+            year_in_school_default = models.CharField(
+                max_length=2,
+                choices=YearInSchool.choices,
+                default=YearInSchool.SENIOR,
+            )
 
             class Meta:
                 app_label = 'model_enums'
@@ -269,14 +274,26 @@ class ChoicesModelTests(TransactionTestCase):
         with connection.schema_editor() as editor:
             editor.create_model(Student)
             try:
+                positional_student = Student(None, YearInSchool.JUNIOR)
+                self.assertEqual(positional_student.year_in_school, 'JR')
+                self.assertIs(type(positional_student.year_in_school), str)
+
                 student = Student(year_in_school=YearInSchool.FRESHMAN)
                 self.assertEqual(student.year_in_school, 'FR')
+                self.assertIs(type(student.year_in_school), str)
+                self.assertEqual(student.year_in_school_default, 'SR')
+                self.assertIs(type(student.year_in_school_default), str)
+
+                student.year_in_school = YearInSchool.GRADUATE
+                self.assertEqual(student.year_in_school, 'GR')
                 self.assertIs(type(student.year_in_school), str)
 
                 student.save()
                 student.refresh_from_db()
-                self.assertEqual(student.year_in_school, 'FR')
+                self.assertEqual(student.year_in_school, 'GR')
                 self.assertIs(type(student.year_in_school), str)
+                self.assertEqual(student.year_in_school_default, 'SR')
+                self.assertIs(type(student.year_in_school_default), str)
             finally:
                 editor.delete_model(Student)
 
@@ -284,6 +301,7 @@ class ChoicesModelTests(TransactionTestCase):
     def test_integerchoices_model_instance_normalization(self):
         class Player(models.Model):
             suit = models.IntegerField(choices=Suit.choices)
+            suit_default = models.IntegerField(choices=Suit.choices, default=Suit.SPADE)
 
             class Meta:
                 app_label = 'model_enums'
@@ -291,13 +309,25 @@ class ChoicesModelTests(TransactionTestCase):
         with connection.schema_editor() as editor:
             editor.create_model(Player)
             try:
+                positional_player = Player(None, Suit.HEART)
+                self.assertEqual(positional_player.suit, 3)
+                self.assertIs(type(positional_player.suit), int)
+
                 player = Player(suit=Suit.DIAMOND)
                 self.assertEqual(player.suit, 1)
+                self.assertIs(type(player.suit), int)
+                self.assertEqual(player.suit_default, 2)
+                self.assertIs(type(player.suit_default), int)
+
+                player.suit = Suit.CLUB
+                self.assertEqual(player.suit, 4)
                 self.assertIs(type(player.suit), int)
 
                 player.save()
                 player.refresh_from_db()
-                self.assertEqual(player.suit, 1)
+                self.assertEqual(player.suit, 4)
                 self.assertIs(type(player.suit), int)
+                self.assertEqual(player.suit_default, 2)
+                self.assertIs(type(player.suit_default), int)
             finally:
                 editor.delete_model(Player)

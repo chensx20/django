@@ -11,6 +11,7 @@ import inspect
 from collections import namedtuple
 
 from django.db.models.constants import LOOKUP_SEP
+from django.db.models.enums import IntegerChoices, TextChoices
 from django.utils import tree
 
 # PathInfo is used when converting lookups (fk__somecol). The contents
@@ -119,6 +120,9 @@ class DeferredAttribute:
     def __init__(self, field):
         self.field = field
 
+    def __set__(self, instance, value):
+        instance.__dict__[self.field.attname] = self._normalize_value(value)
+
     def __get__(self, instance, cls=None):
         """
         Retrieve and caches the value from the datastore on the first lookup.
@@ -149,6 +153,18 @@ class DeferredAttribute:
         if self.field.primary_key and self.field != link_field:
             return getattr(instance, link_field.attname)
         return None
+
+    def _normalize_value(self, value):
+        if value is None or not self.field.choices:
+            return value
+        choice_values = [choice for choice, _ in self.field.flatchoices]
+        if value not in choice_values:
+            return value
+        if isinstance(value, TextChoices):
+            return value.value
+        if isinstance(value, IntegerChoices):
+            return value.value
+        return value
 
 
 class RegisterLookupMixin:
