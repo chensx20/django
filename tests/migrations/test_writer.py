@@ -265,17 +265,25 @@ class WriterTests(SimpleTestCase):
             A = 1
             B = 2
 
+        class IntFlag(enum.IntFlag):
+            A = 1
+            B = 2
+
         self.assertSerializedResultEqual(
             TextEnum.A,
-            ("migrations.test_writer.TextEnum('a-value')", {'import migrations.test_writer'})
+            ("migrations.test_writer.TextEnum['A']", {'import migrations.test_writer'})
         )
         self.assertSerializedResultEqual(
             BinaryEnum.A,
-            ("migrations.test_writer.BinaryEnum(b'a-value')", {'import migrations.test_writer'})
+            ("migrations.test_writer.BinaryEnum['A']", {'import migrations.test_writer'})
         )
         self.assertSerializedResultEqual(
             IntEnum.B,
             ("migrations.test_writer.IntEnum(2)", {'import migrations.test_writer'})
+        )
+        self.assertSerializedResultEqual(
+            IntFlag.A | IntFlag.B,
+            ("migrations.test_writer.IntFlag(3)", {'import migrations.test_writer'})
         )
 
         field = models.CharField(default=TextEnum.B, choices=[(m.value, m) for m in TextEnum])
@@ -283,18 +291,18 @@ class WriterTests(SimpleTestCase):
         self.assertEqual(
             string,
             "models.CharField(choices=["
-            "('a-value', migrations.test_writer.TextEnum('a-value')), "
-            "('value-b', migrations.test_writer.TextEnum('value-b'))], "
-            "default=migrations.test_writer.TextEnum('value-b'))"
+            "('a-value', migrations.test_writer.TextEnum['A']), "
+            "('value-b', migrations.test_writer.TextEnum['B'])], "
+            "default=migrations.test_writer.TextEnum['B'])"
         )
         field = models.CharField(default=BinaryEnum.B, choices=[(m.value, m) for m in BinaryEnum])
         string = MigrationWriter.serialize(field)[0]
         self.assertEqual(
             string,
             "models.CharField(choices=["
-            "(b'a-value', migrations.test_writer.BinaryEnum(b'a-value')), "
-            "(b'value-b', migrations.test_writer.BinaryEnum(b'value-b'))], "
-            "default=migrations.test_writer.BinaryEnum(b'value-b'))"
+            "(b'a-value', migrations.test_writer.BinaryEnum['A']), "
+            "(b'value-b', migrations.test_writer.BinaryEnum['B'])], "
+            "default=migrations.test_writer.BinaryEnum['B'])"
         )
         field = models.IntegerField(default=IntEnum.A, choices=[(m.value, m) for m in IntEnum])
         string = MigrationWriter.serialize(field)[0]
