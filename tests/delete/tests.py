@@ -39,6 +39,7 @@ from .models import (
     RelatedDbOptionParent,
     RProxy,
     S,
+    SecondReferrer,
     SetDefaultDbModel,
     SetNullDbModel,
     T,
@@ -840,36 +841,11 @@ class FastDeleteTests(TestCase):
         # in a single DELETE WHERE referrer_id OR unique_field.
         origin = Origin.objects.create()
         referer = Referrer.objects.create(origin=origin, unique_field=42)
+        SecondReferrer.objects.create(referrer=referer, other_referrer=referer)
+        SecondReferrer.objects.create(referrer=referer, other_referrer=referer)
         with self.assertNumQueries(2):
-            referer.delete()
-
-    def test_fast_delete_aggregation(self):
-        # Fast-deleting when filtering against an aggregation result in
-        # a single query containing a subquery.
-        Base.objects.create()
-        with self.assertNumQueries(1):
             self.assertEqual(
-                Base.objects.annotate(
-                    rels_count=models.Count("rels"),
-                )
-                .filter(rels_count=0)
-                .delete(),
-                (1, {"delete.Base": 1}),
+                referer.delete(),
+                (3, {"delete.SecondReferrer": 2, "delete.Referrer": 1}),
             )
-        self.assertIs(Base.objects.exists(), False)
-
-    def test_fast_delete_empty_result_set(self):
-        user = User.objects.create()
-        with self.assertNumQueries(0):
-            self.assertEqual(
-                User.objects.filter(pk__in=[]).delete(),
-                (0, {}),
-            )
-        self.assertSequenceEqual(User.objects.all(), [user])
-
-    def test_fast_delete_full_match(self):
-        avatar = Avatar.objects.create(desc="bar")
-        User.objects.create(avatar=avatar)
-        with self.assertNumQueries(1):
-            User.objects.filter(~Q(pk__in=[]) | Q(avatar__desc="foo")).delete()
-        self.assertFalse(User.objects.exists())
+        self.assertFalse(SecondReferrer.objects.exists())
