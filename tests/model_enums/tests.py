@@ -3,8 +3,10 @@ import decimal
 import ipaddress
 import uuid
 
+from django.db import connection
 from django.db import models
-from django.test import SimpleTestCase
+from django.test import SimpleTestCase, TransactionTestCase
+from django.test.utils import isolate_apps
 from django.utils.functional import Promise
 from django.utils.translation import gettext_lazy as _
 
@@ -251,3 +253,51 @@ class CustomChoicesTests(SimpleTestCase):
         with self.assertRaisesMessage(TypeError, msg):
             class Identifier(uuid.UUID, models.Choices):
                 A = '972ce4eb-a95f-4a56-9339-68c208a76f18'
+
+
+class ChoicesModelTests(TransactionTestCase):
+    available_apps = ['model_enums']
+
+    @isolate_apps('model_enums')
+    def test_textchoices_model_instance_normalization(self):
+        class Student(models.Model):
+            year_in_school = models.CharField(max_length=2, choices=YearInSchool.choices)
+
+            class Meta:
+                app_label = 'model_enums'
+
+        with connection.schema_editor() as editor:
+            editor.create_model(Student)
+            try:
+                student = Student(year_in_school=YearInSchool.FRESHMAN)
+                self.assertEqual(student.year_in_school, 'FR')
+                self.assertIs(type(student.year_in_school), str)
+
+                student.save()
+                student.refresh_from_db()
+                self.assertEqual(student.year_in_school, 'FR')
+                self.assertIs(type(student.year_in_school), str)
+            finally:
+                editor.delete_model(Student)
+
+    @isolate_apps('model_enums')
+    def test_integerchoices_model_instance_normalization(self):
+        class Player(models.Model):
+            suit = models.IntegerField(choices=Suit.choices)
+
+            class Meta:
+                app_label = 'model_enums'
+
+        with connection.schema_editor() as editor:
+            editor.create_model(Player)
+            try:
+                player = Player(suit=Suit.DIAMOND)
+                self.assertEqual(player.suit, 1)
+                self.assertIs(type(player.suit), int)
+
+                player.save()
+                player.refresh_from_db()
+                self.assertEqual(player.suit, 1)
+                self.assertIs(type(player.suit), int)
+            finally:
+                editor.delete_model(Player)
