@@ -14,7 +14,8 @@ from django.conf import settings
 from django.core import checks, exceptions, validators
 from django.db import connection, connections, router
 from django.db.models.constants import LOOKUP_SEP
-from django.db.models.query_utils import DeferredAttribute, RegisterLookupMixin
+from django.db.models.enums import IntegerChoices, TextChoices
+from django.db.models.query_utils import RegisterLookupMixin
 from django.utils import timezone
 from django.utils.datastructures import DictWrapper
 from django.utils.dateparse import (
@@ -81,6 +82,31 @@ def return_None():
     return None
 
 
+class FieldAttribute:
+    def __init__(self, field):
+        self.field = field
+
+    def __get__(self, instance, cls=None):
+        if instance is None:
+            return self
+        return instance.__dict__[self.field.attname]
+
+    def __set__(self, instance, value):
+        instance.__dict__[self.field.attname] = self._normalize_value(value)
+
+    def _normalize_value(self, value):
+        if value is None or not self.field.choices:
+            return value
+        choice_values = [choice for choice, _ in self.field.flatchoices]
+        if value not in choice_values:
+            return value
+        if isinstance(value, TextChoices):
+            return value.value
+        if isinstance(value, IntegerChoices):
+            return value.value
+        return value
+
+
 @total_ordering
 class Field(RegisterLookupMixin):
     """Base class for all field types"""
@@ -119,7 +145,7 @@ class Field(RegisterLookupMixin):
     one_to_one = None
     related_model = None
 
-    descriptor_class = DeferredAttribute
+    descriptor_class = FieldAttribute
 
     # Generic field type description, usually overridden by subclasses
     def _description(self):
