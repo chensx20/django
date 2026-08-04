@@ -35,6 +35,7 @@ from .models import (
     RChild,
     RChildChild,
     Referrer,
+    SecondReferrer,
     RelatedDbOptionGrandParent,
     RelatedDbOptionParent,
     RProxy,
