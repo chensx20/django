@@ -352,7 +352,8 @@ class Collector:
                 else:
                     continue
             related_model = related.related_model
-            if self.can_fast_delete(related_model, from_field=field):
+            related_qs = related_model._base_manager.using(self.using).all()
+            if self.can_fast_delete(related_qs, from_field=field):
                 model_fast_deletes[related_model].append(field)
                 continue
             batches = self.get_del_batches(new_objs, [field])
