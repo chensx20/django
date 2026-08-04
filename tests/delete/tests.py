@@ -840,8 +840,14 @@ class FastDeleteTests(TestCase):
         # in a single DELETE WHERE referrer_id OR unique_field.
         origin = Origin.objects.create()
         referer = Referrer.objects.create(origin=origin, unique_field=42)
+        SecondReferrer.objects.create(referrer=referer, other_referrer=referer)
+        SecondReferrer.objects.create(referrer=referer, other_referrer=referer)
         with self.assertNumQueries(2):
-            referer.delete()
+            self.assertEqual(
+                referer.delete(),
+                (3, {"delete.SecondReferrer": 2, "delete.Referrer": 1}),
+            )
+        self.assertFalse(SecondReferrer.objects.exists())
 
     def test_fast_delete_aggregation(self):
         # Fast-deleting when filtering against an aggregation result in
