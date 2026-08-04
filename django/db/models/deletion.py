@@ -257,8 +257,6 @@ class Collector:
         """
         Return the objs in suitably sized batches for the used connection.
         """
-        if not isinstance(fields, list):
-            fields = [fields]
         conn_batch_size = max(
             connections[self.using].ops.bulk_batch_size(fields, objs), 1
         )
