@@ -39,6 +39,7 @@ from .models import (
     RelatedDbOptionParent,
     RProxy,
     S,
+    SecondReferrer,
     SetDefaultDbModel,
     SetNullDbModel,
     T,
@@ -836,12 +837,19 @@ class FastDeleteTests(TestCase):
             )
 
     def test_fast_delete_combined_relationships(self):
-        # The cascading fast-delete of SecondReferrer should be combined
-        # in a single DELETE WHERE referrer_id OR unique_field.
-        origin = Origin.objects.create()
-        referer = Referrer.objects.create(origin=origin, unique_field=42)
+        referrer = Referrer.objects.create(
+            origin=Origin.objects.create(),
+            unique_field=1,
+        )
+        SecondReferrer.objects.create(referrer=referrer, other_referrer=referrer)
+
         with self.assertNumQueries(2):
-            referer.delete()
+            deleted = referrer.delete()
+
+        self.assertEqual(
+            deleted,
+            (2, {"delete.SecondReferrer": 1, "delete.Referrer": 1}),
+        )
 
     def test_fast_delete_aggregation(self):
         # Fast-deleting when filtering against an aggregation result in
