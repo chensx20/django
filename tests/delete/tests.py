@@ -7,8 +7,8 @@ from django.test import TestCase, skipIfDBFeature, skipUnlessDBFeature
 
 from .models import (
     MR, A, Avatar, Base, Child, HiddenUser, HiddenUserProfile, M, M2MFrom,
-    M2MTo, MRNull, Origin, Parent, R, RChild, RChildChild, Referrer, S, T,
-    User, create_a, get_default_r,
+    M2MTo, MRNull, Origin, Parent, R, RChild, RChildChild, Referrer,
+    S, SecondReferrer, T, User, create_a, get_default_r,
 )
 
 
@@ -582,3 +582,17 @@ class FastDeleteTests(TestCase):
                 User.objects.filter(avatar__desc='missing').delete(),
                 (0, {'delete.User': 0})
             )
+
+    def test_fast_delete_combined_relationships(self):
+        # The cascading fast-delete of SecondReferrer should be combined
+        # in a single DELETE WHERE referrer_id OR unique_field.
+        origin = Origin.objects.create()
+        referer = Referrer.objects.create(origin=origin, unique_field=42)
+        SecondReferrer.objects.create(referrer=referer, other_referrer=referer)
+        SecondReferrer.objects.create(referrer=referer, other_referrer=referer)
+        with self.assertNumQueries(2):
+            self.assertEqual(
+                referer.delete(),
+                (3, {'delete.SecondReferrer': 2, 'delete.Referrer': 1})
+            )
+        self.assertFalse(SecondReferrer.objects.exists())
