@@ -15,7 +15,7 @@ from django.core import checks, exceptions, validators
 from django.db import connection, connections, router
 from django.db.models.constants import LOOKUP_SEP
 from django.db.models.enums import IntegerChoices, TextChoices
-from django.db.models.query_utils import RegisterLookupMixin
+from django.db.models.query_utils import DeferredAttribute, RegisterLookupMixin
 from django.utils import timezone
 from django.utils.datastructures import DictWrapper
 from django.utils.dateparse import (
@@ -145,7 +145,7 @@ class Field(RegisterLookupMixin):
     one_to_one = None
     related_model = None
 
-    descriptor_class = FieldAttribute
+    descriptor_class = DeferredAttribute
 
     # Generic field type description, usually overridden by subclasses
     def _description(self):
@@ -787,7 +787,11 @@ class Field(RegisterLookupMixin):
             # if you have a classmethod and a field with the same name, then
             # such fields can't be deferred (we don't have a check for this).
             if not getattr(cls, self.attname, None):
-                setattr(cls, self.attname, self.descriptor_class(self))
+                if self.is_relation:
+                    descriptor = self.descriptor_class(self)
+                else:
+                    descriptor = FieldAttribute(self)
+                setattr(cls, self.attname, descriptor)
         if self.choices is not None:
             setattr(cls, 'get_%s_display' % self.name,
                     partialmethod(cls._get_FIELD_display, field=self))
