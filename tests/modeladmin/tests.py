@@ -1021,6 +1021,36 @@ class ModelAdminTests(TestCase):
         self.assertEqual(perms_needed, {"band"})
         self.assertEqual(protected, [])
 
+    def test_get_deleted_objects_combines_related_objects(self):
+        """
+        Admin deletion previews collect related objects when multiple cascade
+        relationships point to the same model.
+        """
+        concert = Concert.objects.create(
+            main_band=self.band,
+            opening_band=self.band,
+            day=1,
+            transport=1,
+        )
+        self.site.register(Band, ModelAdmin)
+        self.site.register(Concert, ModelAdmin)
+        ma = self.site.get_model_admin(Band)
+
+        (
+            deletable_objects,
+            model_count,
+            perms_needed,
+            protected,
+        ) = ma.get_deleted_objects([self.band], request)
+
+        self.assertEqual(
+            deletable_objects,
+            ["Band: The Doors", [f"Concert: {concert}"]],
+        )
+        self.assertEqual(model_count, {"bands": 1, "concerts": 1})
+        self.assertEqual(perms_needed, set())
+        self.assertEqual(protected, [])
+
     def test_modeladmin_repr(self):
         ma = ModelAdmin(Band, self.site)
         self.assertEqual(
