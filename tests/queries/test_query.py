@@ -113,3 +113,20 @@ class TestQuery(SimpleTestCase):
         clone = query.clone()
         clone.add_select_related(['note', 'creator__extra'])
         self.assertEqual(query.select_related, {'creator': {}})
+
+    def test_iterable_lookup_value(self):
+        query = Query(Author)
+
+        list_value = [F('name')]
+        resolved_list_value = query.resolve_lookup_value(
+            list_value, can_reuse=set(), allow_joins=False, simple_col=True,
+        )
+        self.assertIsInstance(resolved_list_value, list)
+        self.assertIsInstance(resolved_list_value[0], SimpleCol)
+
+        tuple_value = (F('name'),)
+        resolved_tuple_value = query.resolve_lookup_value(
+            tuple_value, can_reuse=set(), allow_joins=False, simple_col=True,
+        )
+        self.assertIsInstance(resolved_tuple_value, tuple)
+        self.assertIsInstance(resolved_tuple_value[0], SimpleCol)
