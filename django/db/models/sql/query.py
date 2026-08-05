@@ -1331,14 +1331,13 @@ class Query(BaseExpression):
         elif isinstance(value, (list, tuple)):
             # The items of the iterable may be expressions and therefore need
             # to be resolved independently.
-            values = (
+            values = [
                 self.resolve_lookup_value(sub_value, can_reuse, allow_joins, summarize)
                 for sub_value in value
-            )
-            type_ = type(value)
-            if hasattr(type_, "_make"):  # namedtuple
-                return type_(*values)
-            return type_(values)
+            ]
+            if hasattr(type(value), "_make"):  # namedtuple
+                return type(value)(*values)
+            return type(value)(values)
         return value
 
     def solve_lookup_type(self, lookup, summarize=False):

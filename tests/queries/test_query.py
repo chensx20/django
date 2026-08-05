@@ -133,11 +133,27 @@ class TestQuery(SimpleTestCase):
         self.assertEqual(query.select_related, {"creator": {}})
 
     def test_iterable_lookup_value(self):
-        query = Query(Item)
-        where = query.build_where(Q(name=["a", "b"]))
-        name_exact = where.children[0]
-        self.assertIsInstance(name_exact, Exact)
-        self.assertEqual(name_exact.rhs, "['a', 'b']")
+        query = Query(Author)
+
+        list_value = [F("name")]
+        resolved_list_value = query.resolve_lookup_value(
+            list_value,
+            can_reuse=set(),
+            allow_joins=False,
+            summarize=False,
+        )
+        self.assertIsInstance(resolved_list_value, list)
+        self.assertIsInstance(resolved_list_value[0], Col)
+
+        tuple_value = (F("name"),)
+        resolved_tuple_value = query.resolve_lookup_value(
+            tuple_value,
+            can_reuse=set(),
+            allow_joins=False,
+            summarize=False,
+        )
+        self.assertIsInstance(resolved_tuple_value, tuple)
+        self.assertIsInstance(resolved_tuple_value[0], Col)
 
     def test_filter_conditional(self):
         query = Query(Item)
