@@ -1,4 +1,5 @@
 from datetime import datetime
+from unittest import mock
 
 from django.core.exceptions import FieldError
 from django.db import DEFAULT_DB_ALIAS, connection
@@ -133,27 +134,15 @@ class TestQuery(SimpleTestCase):
         self.assertEqual(query.select_related, {"creator": {}})
 
     def test_iterable_lookup_value(self):
-        query = Query(Author)
-
-        list_value = [F("name")]
-        resolved_list_value = query.resolve_lookup_value(
-            list_value,
-            can_reuse=set(),
-            allow_joins=False,
-            summarize=False,
-        )
-        self.assertIsInstance(resolved_list_value, list)
-        self.assertIsInstance(resolved_list_value[0], Col)
-
-        tuple_value = (F("name"),)
-        resolved_tuple_value = query.resolve_lookup_value(
-            tuple_value,
-            can_reuse=set(),
-            allow_joins=False,
-            summarize=False,
-        )
-        self.assertIsInstance(resolved_tuple_value, tuple)
-        self.assertIsInstance(resolved_tuple_value[0], Col)
+        query = Query(Item)
+        with mock.patch.object(
+            CharField, "get_prep_value", side_effect=lambda value: value
+        ):
+            where = query.build_where(Q(name=["a", "b"]))
+        name_exact = where.children[0]
+        self.assertIsInstance(name_exact, Exact)
+        self.assertIsInstance(name_exact.rhs, list)
+        self.assertEqual(name_exact.rhs, ["a", "b"])
 
     def test_filter_conditional(self):
         query = Query(Item)
