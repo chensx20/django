@@ -569,6 +569,11 @@ class Model(metaclass=ModelBase):
         return getattr(self, meta.pk.attname)
 
     def _set_pk_val(self, value):
+        for parent in self._meta.get_parent_list():
+            parent_link = self._meta.get_ancestor_link(parent)
+            if parent_link and parent_link != self._meta.pk:
+                setattr(self, parent_link.attname, value)
+            setattr(self, parent._meta.pk.attname, value)
         return setattr(self, self._meta.pk.attname, value)
 
     pk = property(_get_pk_val, _set_pk_val)

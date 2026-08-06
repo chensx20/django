@@ -10,10 +10,11 @@ from django.test import TestCase
 
 from .models import (
     ArticleWithAuthor, BachelorParty, BirthdayParty, BusStation, Child,
-    DerivedM, InternalCertificationAudit, ItalianRestaurant, M2MChild,
-    MessyBachelorParty, ParkingLot, ParkingLot3, ParkingLot4A, ParkingLot4B,
-    Person, Place, Profile, QualityControl, Restaurant, SelfRefChild,
-    SelfRefParent, Senator, Supplier, TrainStation, User, Wholesaler,
+    Congressman, DerivedM, InternalCertificationAudit, ItalianRestaurant,
+    M2MChild, MessyBachelorParty, ParkingLot, ParkingLot3, ParkingLot4A,
+    ParkingLot4B, Person, Place, Politician, Profile, QualityControl,
+    Restaurant, SelfRefChild, SelfRefParent, Senator, Supplier,
+    TrainStation, User, Wholesaler,
 )
 
 
@@ -414,6 +415,32 @@ class ModelInheritanceTest(TestCase):
         p = Profile.objects.create(username="user_with_profile")
         form = ProfileForm({'username': "user_with_profile", 'extra': "hello"}, instance=p)
         self.assertTrue(form.is_valid())
+
+    def test_create_new_instance_with_pk_equals_none(self):
+        profile = Profile.objects.create(username='john', extra='old')
+        profile.pk = None
+        profile.username = 'bill'
+        profile.extra = 'new'
+        profile.save()
+
+        self.assertEqual(Profile.objects.count(), 2)
+        self.assertEqual(User.objects.count(), 2)
+        self.assertEqual(User.objects.get(pk=profile.user_ptr_id).username, 'bill')
+        self.assertEqual(Profile.objects.get(pk=profile.pk).extra, 'new')
+
+    def test_create_new_instance_with_pk_equals_none_multi_inheritance(self):
+        congressman = Congressman.objects.create(name='John Doe', title='Representative', state='NC')
+        congressman.pk = None
+        congressman.name = 'Jane Doe'
+        congressman.title = 'Senator'
+        congressman.state = 'SC'
+        congressman.save()
+
+        self.assertEqual(Congressman.objects.count(), 2)
+        self.assertEqual(Person.objects.count(), 2)
+        self.assertEqual(Politician.objects.count(), 2)
+        self.assertEqual(Person.objects.get(pk=congressman.person_ptr_id).name, 'Jane Doe')
+        self.assertEqual(Politician.objects.get(pk=congressman.politician_ptr_id).title, 'Senator')
 
     def test_inheritance_joins(self):
         # Test for #17502 - check that filtering through two levels of
