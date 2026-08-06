@@ -4,6 +4,7 @@ import ipaddress
 import uuid
 
 from django.db import models
+from django.template import Context, Template
 from django.test import SimpleTestCase
 from django.utils.functional import Promise
 from django.utils.translation import gettext_lazy as _
@@ -148,6 +149,17 @@ class ChoicesTests(SimpleTestCase):
             for member in test:
                 with self.subTest(member=member):
                     self.assertEqual(str(test[member.name]), str(member.value))
+
+    def test_templates(self):
+        template = Template(
+            "{% if student.year_in_school == YearInSchool.FRESHMAN %}"
+            "Freshman"
+            "{% endif %}"
+        )
+        student = type("Student", (), {"year_in_school": YearInSchool.FRESHMAN})()
+        context = Context({"student": student, "YearInSchool": YearInSchool})
+
+        self.assertEqual(template.render(context), "Freshman")
 
 
 class Separator(bytes, models.Choices):
