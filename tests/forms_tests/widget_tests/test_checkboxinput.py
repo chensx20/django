@@ -74,6 +74,16 @@ class CheckboxInputTest(WidgetTest):
         with self.assertRaises(AttributeError):
             widget.render('greeting', True)
 
+    def test_get_context_does_not_mutate_attrs(self):
+        attrs = {'class': 'fun'}
+
+        checked_context = self.widget.get_context('is_cool', True, attrs)
+        unchecked_context = self.widget.get_context('is_cool', False, attrs)
+
+        self.assertEqual(attrs, {'class': 'fun'})
+        self.assertIs(checked_context['widget']['attrs']['checked'], True)
+        self.assertNotIn('checked', unchecked_context['widget']['attrs'])
+
     def test_value_from_datadict(self):
         """
         The CheckboxInput widget will return False if the key is not found in
