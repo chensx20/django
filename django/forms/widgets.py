@@ -140,7 +140,7 @@ class Media:
         except CyclicDependencyError:
             warnings.warn(
                 'Detected duplicate Media files in an opposite order: {}'.format(
-                    ', '.join(repr(l) for l in lists)
+                    ', '.join(repr(list_) for list_ in lists)
                 ), MediaOrderConflictWarning,
             )
             return list(all_items)
@@ -376,6 +376,9 @@ class FileInput(Input):
     needs_multipart_form = True
     template_name = 'django/forms/widgets/file.html'
 
+    def use_required_attribute(self, initial):
+        return super().use_required_attribute(initial) and not initial
+
     def format_value(self, value):
         """File input never renders a value."""
         return
@@ -450,9 +453,6 @@ class ClearableFileInput(FileInput):
             # False signals to clear any existing value, as opposed to just None
             return False
         return upload
-
-    def use_required_attribute(self, initial):
-        return super().use_required_attribute(initial) and not initial
 
     def value_omitted_from_data(self, data, files, name):
         return (
