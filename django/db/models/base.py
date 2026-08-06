@@ -549,6 +549,7 @@ class Model(AltersData, metaclass=ModelBase):
 
         for field in fields_iter:
             is_related_object = False
+            set_pk_default = False
             # Virtual field
             if field.column is None or field.generated:
                 continue
@@ -565,8 +566,7 @@ class Model(AltersData, metaclass=ModelBase):
                             val = kwargs.pop(field.attname)
                         except KeyError:
                             val = field.get_default()
-                            if field.primary_key:
-                                self._state._pk_default = True
+                            set_pk_default = field.primary_key
                 else:
                     try:
                         val = kwargs.pop(field.attname)
@@ -576,12 +576,10 @@ class Model(AltersData, metaclass=ModelBase):
                         # get_default() to be evaluated, and then not used.
                         # Refs #12057.
                         val = field.get_default()
-                        if field.primary_key:
-                            self._state._pk_default = True
+                        set_pk_default = field.primary_key
             else:
                 val = field.get_default()
-                if field.primary_key:
-                    self._state._pk_default = True
+                set_pk_default = field.primary_key
 
             if is_related_object:
                 # If we are passed a related instance, set it using the
@@ -592,7 +590,13 @@ class Model(AltersData, metaclass=ModelBase):
                     _setattr(self, field.name, rel_obj)
             else:
                 if val is not _DEFERRED:
+                    if set_pk_default:
+                        self._state._pk_default_in_init = True
+                    if set_pk_default:
+                        self._state._pk_default = True
                     _setattr(self, field.attname, val)
+                    if set_pk_default:
+                        self._state._pk_default_in_init = False
 
         if kwargs:
             property_names = opts._property_names
@@ -700,6 +704,16 @@ class Model(AltersData, metaclass=ModelBase):
             for attr, value in state.pop("_memoryview_attrs"):
                 state[attr] = memoryview(value)
         self.__dict__.update(state)
+
+    def __setattr__(self, name, value):
+        if (
+            name == self._meta.pk.attname
+            and hasattr(self, "_state")
+            and not getattr(self._state, "_pk_default_in_init", False)
+        ):
+            if hasattr(self._state, "_pk_default"):
+                self._state._pk_default = False
+        return super().__setattr__(name, value)
 
     def _get_pk_val(self, meta=None):
         meta = meta or self._meta
