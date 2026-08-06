@@ -136,6 +136,15 @@ def inclusion_one_default(one, two='hi'):
 inclusion_one_default.anything = "Expected inclusion_one_default __dict__"
 
 
+@register.inclusion_tag('inclusion.html')
+def inclusion_keyword_only_default(*, kwarg=42):
+    """Expected inclusion_keyword_only_default __doc__"""
+    return {"result": "inclusion_keyword_only_default - Expected result: %s" % kwarg}
+
+
+inclusion_keyword_only_default.anything = "Expected inclusion_keyword_only_default __dict__"
+
+
 @register.inclusion_tag(engine.get_template('inclusion.html'))
 def inclusion_one_default_from_template(one, two='hi'):
     """Expected inclusion_one_default_from_template __doc__"""
