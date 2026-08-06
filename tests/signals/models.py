@@ -1,7 +1,6 @@
 """
 Testing signals before/after saving and deleting.
 """
-
 from django.db import models
 
 
@@ -17,6 +16,9 @@ class Car(models.Model):
     make = models.CharField(max_length=20)
     model = models.CharField(max_length=20)
 
+    def __str__(self):
+        return "%s %s" % (self.make, self.model)
+
 
 class Author(models.Model):
     name = models.CharField(max_length=20)
@@ -31,8 +33,3 @@ class Book(models.Model):
 
     def __str__(self):
         return self.name
-
-
-class Page(models.Model):
-    book = models.ForeignKey(Book, on_delete=models.CASCADE)
-    text = models.TextField()

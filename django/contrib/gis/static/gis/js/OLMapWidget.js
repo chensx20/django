@@ -1,53 +1,49 @@
 /* global ol */
-"use strict";
-class GeometryTypeControl extends ol.control.Control {
-    // Map control to switch type when geometry type is unknown
-    constructor(opt_options) {
-        const options = opt_options || {};
 
-        const element = document.createElement("div");
-        element.className =
-            "switch-type type-" + options.type + " ol-control ol-unselectable";
-        if (options.active) {
+var GeometryTypeControl = function(opt_options) {
+    'use strict';
+    // Map control to switch type when geometry type is unknown
+    var options = opt_options || {};
+
+    var element = document.createElement('div');
+    element.className = 'switch-type type-' + options.type + ' ol-control ol-unselectable';
+    if (options.active) {
+        element.classList.add("type-active");
+    }
+
+    var self = this;
+    var switchType = function(e) {
+        e.preventDefault();
+        if (options.widget.currentGeometryType !== self) {
+            options.widget.map.removeInteraction(options.widget.interactions.draw);
+            options.widget.interactions.draw = new ol.interaction.Draw({
+                features: options.widget.featureCollection,
+                type: options.type
+            });
+            options.widget.map.addInteraction(options.widget.interactions.draw);
+            options.widget.currentGeometryType.element.classList.remove('type-active');
+            options.widget.currentGeometryType = self;
             element.classList.add("type-active");
         }
+    };
 
-        super({
-            element: element,
-            target: options.target,
-        });
-        const self = this;
-        const switchType = function (e) {
-            e.preventDefault();
-            if (options.widget.currentGeometryType !== self) {
-                options.widget.map.removeInteraction(
-                    options.widget.interactions.draw,
-                );
-                options.widget.interactions.draw = new ol.interaction.Draw({
-                    features: options.widget.featureCollection,
-                    type: options.type,
-                });
-                options.widget.map.addInteraction(
-                    options.widget.interactions.draw,
-                );
-                options.widget.currentGeometryType.element.classList.remove(
-                    "type-active",
-                );
-                options.widget.currentGeometryType = self;
-                element.classList.add("type-active");
-            }
-        };
+    element.addEventListener('click', switchType, false);
+    element.addEventListener('touchstart', switchType, false);
 
-        element.addEventListener("click", switchType, false);
-        element.addEventListener("touchstart", switchType, false);
-    }
-}
+    ol.control.Control.call(this, {
+        element: element
+    });
+};
+ol.inherits(GeometryTypeControl, ol.control.Control);
 
 // TODO: allow deleting individual features (#8972)
-class MapWidget {
-    constructor(options) {
+(function() {
+    'use strict';
+    var jsonFormat = new ol.format.GeoJSON();
+
+    function MapWidget(options) {
         this.map = null;
-        this.interactions = { draw: null, modify: null };
+        this.interactions = {draw: null, modify: null};
         this.typeChoices = false;
         this.ready = false;
 
@@ -56,30 +52,17 @@ class MapWidget {
             default_lat: 0,
             default_lon: 0,
             default_zoom: 12,
-            is_collection:
-                options.geom_name.includes("Multi") ||
-                options.geom_name.includes("Collection"),
+            is_collection: options.geom_name.indexOf('Multi') > -1 || options.geom_name.indexOf('Collection') > -1
         };
 
         // Altering using user-provided options
-        for (const property in options) {
-            if (Object.hasOwn(options, property)) {
+        for (var property in options) {
+            if (options.hasOwnProperty(property)) {
                 this.options[property] = options[property];
             }
         }
-
-        // Options' base_layer can be empty, or contain a layerBuilder key, or
-        // be a layer already constructed.
-        const base_layer = options.base_layer;
-        if (
-            typeof base_layer === "string" &&
-            base_layer in MapWidget.layerBuilder
-        ) {
-            this.baseLayer = MapWidget.layerBuilder[base_layer]();
-        } else if (base_layer && typeof base_layer !== "string") {
-            this.baseLayer = base_layer;
-        } else {
-            this.baseLayer = MapWidget.layerBuilder.osm();
+        if (!options.base_layer) {
+            this.options.base_layer = new ol.layer.Tile({source: new ol.source.OSM()});
         }
 
         this.map = this.createMap();
@@ -88,17 +71,17 @@ class MapWidget {
             map: this.map,
             source: new ol.source.Vector({
                 features: this.featureCollection,
-                useSpatialIndex: false, // improve performance
+                useSpatialIndex: false // improve performance
             }),
             updateWhileAnimating: true, // optional, for instant visual feedback
-            updateWhileInteracting: true, // optional, for instant visual feedback
+            updateWhileInteracting: true // optional, for instant visual feedback
         });
 
         // Populate and set handlers for the feature container
-        const self = this;
-        this.featureCollection.on("add", function (event) {
-            const feature = event.element;
-            feature.on("change", function () {
+        var self = this;
+        this.featureCollection.on('add', function(event) {
+            var feature = event.element;
+            feature.on('change', function() {
                 self.serializeFeatures();
             });
             if (self.ready) {
@@ -109,19 +92,16 @@ class MapWidget {
             }
         });
 
-        const initial_value = document.getElementById(this.options.id).value;
+        var initial_value = document.getElementById(this.options.id).value;
         if (initial_value) {
-            const jsonFormat = new ol.format.GeoJSON();
-            const features = jsonFormat.readFeatures(
-                '{"type": "Feature", "geometry": ' + initial_value + "}",
-            );
-            const extent = ol.extent.createEmpty();
-            features.forEach(function (feature) {
+            var features = jsonFormat.readFeatures('{"type": "Feature", "geometry": ' + initial_value + '}');
+            var extent = ol.extent.createEmpty();
+            features.forEach(function(feature) {
                 this.featureOverlay.getSource().addFeature(feature);
                 ol.extent.extend(extent, feature.getGeometry().getExtent());
             }, this);
             // Center/zoom the map
-            this.map.getView().fit(extent, { minResolution: 1 });
+            this.map.getView().fit(extent, {maxZoom: this.options.default_zoom});
         } else {
             this.map.getView().setCenter(this.defaultCenter());
         }
@@ -129,148 +109,112 @@ class MapWidget {
         if (initial_value && !this.options.is_collection) {
             this.disableDrawing();
         }
-        const clearNode = document.getElementById(
-            this.map.getTarget(),
-        ).nextElementSibling;
-        if (clearNode.classList.contains("clear_features")) {
-            clearNode.querySelector("a").addEventListener("click", (ev) => {
-                ev.preventDefault();
-                self.clearFeatures();
-            });
-        }
         this.ready = true;
     }
 
-    createMap() {
-        return new ol.Map({
+    MapWidget.prototype.createMap = function() {
+        var map = new ol.Map({
             target: this.options.map_id,
-            layers: [this.baseLayer],
+            layers: [this.options.base_layer],
             view: new ol.View({
-                zoom: this.options.default_zoom,
-            }),
+                zoom: this.options.default_zoom
+            })
         });
-    }
+        return map;
+    };
 
-    createInteractions() {
+    MapWidget.prototype.createInteractions = function() {
         // Initialize the modify interaction
         this.interactions.modify = new ol.interaction.Modify({
             features: this.featureCollection,
-            deleteCondition: function (event) {
-                return (
-                    ol.events.condition.shiftKeyOnly(event) &&
-                    ol.events.condition.singleClick(event)
-                );
-            },
+            deleteCondition: function(event) {
+                return ol.events.condition.shiftKeyOnly(event) &&
+                    ol.events.condition.singleClick(event);
+            }
         });
 
         // Initialize the draw interaction
-        let geomType = this.options.geom_name;
-        if (geomType === "Geometry" || geomType === "GeometryCollection") {
+        var geomType = this.options.geom_name;
+        if (geomType === "Unknown" || geomType === "GeometryCollection") {
             // Default to Point, but create icons to switch type
             geomType = "Point";
-            this.currentGeometryType = new GeometryTypeControl({
-                widget: this,
-                type: "Point",
-                active: true,
-            });
+            this.currentGeometryType = new GeometryTypeControl({widget: this, type: "Point", active: true});
             this.map.addControl(this.currentGeometryType);
-            this.map.addControl(
-                new GeometryTypeControl({
-                    widget: this,
-                    type: "LineString",
-                    active: false,
-                }),
-            );
-            this.map.addControl(
-                new GeometryTypeControl({
-                    widget: this,
-                    type: "Polygon",
-                    active: false,
-                }),
-            );
+            this.map.addControl(new GeometryTypeControl({widget: this, type: "LineString", active: false}));
+            this.map.addControl(new GeometryTypeControl({widget: this, type: "Polygon", active: false}));
             this.typeChoices = true;
         }
         this.interactions.draw = new ol.interaction.Draw({
             features: this.featureCollection,
-            type: geomType,
+            type: geomType
         });
 
         this.map.addInteraction(this.interactions.draw);
         this.map.addInteraction(this.interactions.modify);
-    }
+    };
 
-    defaultCenter() {
-        const center = [this.options.default_lon, this.options.default_lat];
+    MapWidget.prototype.defaultCenter = function() {
+        var center = [this.options.default_lon, this.options.default_lat];
         if (this.options.map_srid) {
-            return ol.proj.transform(
-                center,
-                "EPSG:4326",
-                this.map.getView().getProjection(),
-            );
+            return ol.proj.transform(center, 'EPSG:4326', this.map.getView().getProjection());
         }
         return center;
-    }
+    };
 
-    enableDrawing() {
+    MapWidget.prototype.enableDrawing = function() {
         this.interactions.draw.setActive(true);
         if (this.typeChoices) {
             // Show geometry type icons
-            const divs = document.getElementsByClassName("switch-type");
-            for (let i = 0; i !== divs.length; i++) {
+            var divs = document.getElementsByClassName("switch-type");
+            for (var i = 0; i !== divs.length; i++) {
                 divs[i].style.visibility = "visible";
             }
         }
-    }
+    };
 
-    disableDrawing() {
+    MapWidget.prototype.disableDrawing = function() {
         if (this.interactions.draw) {
             this.interactions.draw.setActive(false);
             if (this.typeChoices) {
                 // Hide geometry type icons
-                const divs = document.getElementsByClassName("switch-type");
-                for (let i = 0; i !== divs.length; i++) {
+                var divs = document.getElementsByClassName("switch-type");
+                for (var i = 0; i !== divs.length; i++) {
                     divs[i].style.visibility = "hidden";
                 }
             }
         }
-    }
+    };
 
-    clearFeatures() {
+    MapWidget.prototype.clearFeatures = function() {
         this.featureCollection.clear();
         // Empty textarea widget
-        document.getElementById(this.options.id).value = "";
+        document.getElementById(this.options.id).value = '';
         this.enableDrawing();
-    }
+    };
 
-    serializeFeatures() {
+    MapWidget.prototype.serializeFeatures = function() {
         // Three use cases: GeometryCollection, multigeometries, and single geometry
-        let geometry = null;
-        const features = this.featureOverlay.getSource().getFeatures();
+        var geometry = null;
+        var features = this.featureOverlay.getSource().getFeatures();
         if (this.options.is_collection) {
             if (this.options.geom_name === "GeometryCollection") {
-                const geometries = [];
-                for (let i = 0; i < features.length; i++) {
+                var geometries = [];
+                for (var i = 0; i < features.length; i++) {
                     geometries.push(features[i].getGeometry());
                 }
                 geometry = new ol.geom.GeometryCollection(geometries);
             } else {
                 geometry = features[0].getGeometry().clone();
-                for (let j = 1; j < features.length; j++) {
+                for (var j = 1; j < features.length; j++) {
                     switch (geometry.getType()) {
-                        case "MultiPoint":
-                            geometry.appendPoint(
-                                features[j].getGeometry().getPoint(0),
-                            );
-                            break;
-                        case "MultiLineString":
-                            geometry.appendLineString(
-                                features[j].getGeometry().getLineString(0),
-                            );
-                            break;
-                        case "MultiPolygon":
-                            geometry.appendPolygon(
-                                features[j].getGeometry().getPolygon(0),
-                            );
+                    case "MultiPoint":
+                        geometry.appendPoint(features[j].getGeometry().getPoint(0));
+                        break;
+                    case "MultiLineString":
+                        geometry.appendLineString(features[j].getGeometry().getLineString(0));
+                        break;
+                    case "MultiPolygon":
+                        geometry.appendPolygon(features[j].getGeometry().getPolygon(0));
                     }
                 }
             }
@@ -279,55 +223,8 @@ class MapWidget {
                 geometry = features[0].getGeometry();
             }
         }
-        const jsonFormat = new ol.format.GeoJSON();
-        document.getElementById(this.options.id).value =
-            jsonFormat.writeGeometry(geometry);
-    }
-}
+        document.getElementById(this.options.id).value = jsonFormat.writeGeometry(geometry);
+    };
 
-// Static property assignment (ES6-compatible)
-MapWidget.layerBuilder = {
-    nasaWorldview: () => {
-        return new ol.layer.Tile({
-            source: new ol.source.XYZ({
-                attributions: "NASA Worldview",
-                maxZoom: 8,
-                url:
-                    "https://map1{a-c}.vis.earthdata.nasa.gov/wmts-webmerc/" +
-                    "BlueMarble_ShadedRelief_Bathymetry/default/%7BTime%7D/" +
-                    "GoogleMapsCompatible_Level8/{z}/{y}/{x}.jpg",
-            }),
-        });
-    },
-    osm: () => {
-        return new ol.layer.Tile({ source: new ol.source.OSM() });
-    },
-};
-
-function initMapWidgetInSection(section) {
-    const maps = [];
-
-    section.querySelectorAll(".dj_map_wrapper").forEach((wrapper) => {
-        // Avoid initializing map widget on an empty form.
-        if (wrapper.id.includes("__prefix__")) {
-            return;
-        }
-        const textarea_id = wrapper.querySelector("textarea").id;
-        const options_script = wrapper.querySelector(
-            `script#${textarea_id}_mapwidget_options`,
-        );
-        const options = JSON.parse(options_script.textContent);
-        options.id = textarea_id;
-        options.map_id = wrapper.querySelector(".dj_map").id;
-        maps.push(new MapWidget(options));
-    });
-
-    return maps;
-}
-
-document.addEventListener("DOMContentLoaded", () => {
-    initMapWidgetInSection(document);
-    document.addEventListener("formset:added", (ev) => {
-        initMapWidgetInSection(ev.target);
-    });
-});
+    window.MapWidget = MapWidget;
+})();

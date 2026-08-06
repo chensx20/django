@@ -2,24 +2,19 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-    dependencies = []
+
+    dependencies = [
+    ]
 
     operations = [
         migrations.CreateModel(
-            name="SillyModel",
+            name='SillyModel',
             fields=[
-                (
-                    "id",
-                    models.BigAutoField(
-                        verbose_name="ID",
-                        serialize=False,
-                        auto_created=True,
-                        primary_key=True,
-                    ),
-                ),
-                ("silly_field", models.BooleanField(default=False)),
+                ('id', models.AutoField(verbose_name='ID', serialize=False, auto_created=True, primary_key=True)),
+                ('silly_field', models.BooleanField(default=False)),
             ],
-            options={},
+            options={
+            },
             bases=(models.Model,),
         ),
     ]

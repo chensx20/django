@@ -19,10 +19,7 @@ class Person(models.Model):
 class Category(models.Model):
     name = models.CharField(max_length=20)
     slug = models.SlugField(max_length=20)
-    url = models.CharField("The URL", max_length=40)
-
-    class Meta:
-        ordering = ("pk",)
+    url = models.CharField('The URL', max_length=40)
 
     def __str__(self):
         return self.name
@@ -31,20 +28,11 @@ class Category(models.Model):
         return self.__str__()
 
 
-class WriterManager(models.Manager):
-    def get_queryset(self):
-        qs = super().get_queryset()
-        return qs.filter(archived=False)
-
-
 class Writer(models.Model):
-    name = models.CharField(max_length=50, help_text="Use both first and last names.")
-    archived = models.BooleanField(default=False, editable=False)
-
-    objects = WriterManager()
+    name = models.CharField(max_length=50, help_text='Use both first and last names.')
 
     class Meta:
-        ordering = ("name",)
+        ordering = ('name',)
 
     def __str__(self):
         return self.name
@@ -52,9 +40,9 @@ class Writer(models.Model):
 
 class Article(models.Model):
     ARTICLE_STATUS = (
-        (1, "Draft"),
-        (2, "Pending"),
-        (3, "Live"),
+        (1, 'Draft'),
+        (2, 'Pending'),
+        (3, 'Live'),
     )
     headline = models.CharField(max_length=50)
     slug = models.SlugField()
@@ -95,7 +83,7 @@ class Publication(models.Model):
 
 
 def default_mode():
-    return "di"
+    return 'di'
 
 
 def default_category():
@@ -103,21 +91,19 @@ def default_category():
 
 
 class PublicationDefaults(models.Model):
-    MODE_CHOICES = (("di", "direct"), ("de", "delayed"))
-    CATEGORY_CHOICES = ((1, "Games"), (2, "Comics"), (3, "Novel"))
+    MODE_CHOICES = (('di', 'direct'), ('de', 'delayed'))
+    CATEGORY_CHOICES = ((1, 'Games'), (2, 'Comics'), (3, 'Novel'))
     title = models.CharField(max_length=30)
     date_published = models.DateField(default=datetime.date.today)
     datetime_published = models.DateTimeField(default=datetime.datetime(2000, 1, 1))
     mode = models.CharField(max_length=2, choices=MODE_CHOICES, default=default_mode)
     category = models.IntegerField(choices=CATEGORY_CHOICES, default=default_category)
     active = models.BooleanField(default=True)
-    file = models.FileField(default="default.txt")
+    file = models.FileField(default='default.txt')
 
 
 class Author(models.Model):
-    publication = models.OneToOneField(
-        Publication, models.SET_NULL, null=True, blank=True
-    )
+    publication = models.OneToOneField(Publication, models.SET_NULL, null=True, blank=True)
     full_name = models.CharField(max_length=255)
 
 
@@ -135,12 +121,12 @@ class WriterProfile(models.Model):
 
 
 class Document(models.Model):
-    myfile = models.FileField(storage=temp_storage, upload_to="unused", blank=True)
+    myfile = models.FileField(upload_to='unused', blank=True)
 
 
 class TextFile(models.Model):
     description = models.CharField(max_length=20)
-    file = models.FileField(storage=temp_storage, upload_to="tests", max_length=15)
+    file = models.FileField(storage=temp_storage, upload_to='tests', max_length=15)
 
     def __str__(self):
         return self.description
@@ -148,19 +134,17 @@ class TextFile(models.Model):
 
 class CustomFileField(models.FileField):
     def save_form_data(self, instance, data):
-        been_here = getattr(self, "been_saved", False)
+        been_here = getattr(self, 'been_saved', False)
         assert not been_here, "save_form_data called more than once"
-        setattr(self, "been_saved", True)
+        setattr(self, 'been_saved', True)
 
 
 class CustomFF(models.Model):
-    f = CustomFileField(upload_to="unused", blank=True)
+    f = CustomFileField(upload_to='unused', blank=True)
 
 
 class FilePathModel(models.Model):
-    path = models.FilePathField(
-        path=os.path.dirname(__file__), match="models.py", blank=True
-    )
+    path = models.FilePathField(path=os.path.dirname(__file__), match='models.py', blank=True)
 
 
 try:
@@ -170,8 +154,8 @@ try:
 
     class ImageFile(models.Model):
         def custom_upload_path(self, filename):
-            path = self.path or "tests"
-            return "%s/%s" % (path, filename)
+            path = self.path or 'tests'
+            return '%s/%s' % (path, filename)
 
         description = models.CharField(max_length=20)
 
@@ -179,41 +163,32 @@ try:
         # trigger the bug in #10404 with width/height not getting assigned.
         width = models.IntegerField(editable=False)
         height = models.IntegerField(editable=False)
-        image = models.ImageField(
-            storage=temp_storage,
-            upload_to=custom_upload_path,
-            width_field="width",
-            height_field="height",
-        )
-        path = models.CharField(max_length=16, blank=True, default="")
+        image = models.ImageField(storage=temp_storage, upload_to=custom_upload_path,
+                                  width_field='width', height_field='height')
+        path = models.CharField(max_length=16, blank=True, default='')
 
         def __str__(self):
             return self.description
 
     class OptionalImageFile(models.Model):
         def custom_upload_path(self, filename):
-            path = self.path or "tests"
-            return "%s/%s" % (path, filename)
+            path = self.path or 'tests'
+            return '%s/%s' % (path, filename)
 
         description = models.CharField(max_length=20)
-        image = models.ImageField(
-            storage=temp_storage,
-            upload_to=custom_upload_path,
-            width_field="width",
-            height_field="height",
-            blank=True,
-            null=True,
-        )
+        image = models.ImageField(storage=temp_storage, upload_to=custom_upload_path,
+                                  width_field='width', height_field='height',
+                                  blank=True, null=True)
         width = models.IntegerField(editable=False, null=True)
         height = models.IntegerField(editable=False, null=True)
-        path = models.CharField(max_length=16, blank=True, default="")
+        path = models.CharField(max_length=16, blank=True, default='')
 
         def __str__(self):
             return self.description
 
     class NoExtensionImageFile(models.Model):
         def upload_to(self, filename):
-            return "tests/no_extension"
+            return 'tests/no_extension'
 
         description = models.CharField(max_length=20)
         image = models.ImageField(storage=temp_storage, upload_to=upload_to)
@@ -241,7 +216,7 @@ class Price(models.Model):
     quantity = models.PositiveIntegerField()
 
     class Meta:
-        unique_together = (("price", "quantity"),)
+        unique_together = (('price', 'quantity'),)
 
     def __str__(self):
         return "%s for %s" % (self.quantity, self.price)
@@ -253,29 +228,25 @@ class Triple(models.Model):
     right = models.IntegerField()
 
     class Meta:
-        unique_together = (("left", "middle"), ("middle", "right"))
+        unique_together = (('left', 'middle'), ('middle', 'right'))
 
 
 class ArticleStatus(models.Model):
     ARTICLE_STATUS_CHAR = (
-        ("d", "Draft"),
-        ("p", "Pending"),
-        ("l", "Live"),
+        ('d', 'Draft'),
+        ('p', 'Pending'),
+        ('l', 'Live'),
     )
-    status = models.CharField(
-        max_length=2, choices=ARTICLE_STATUS_CHAR, blank=True, null=True
-    )
+    status = models.CharField(max_length=2, choices=ARTICLE_STATUS_CHAR, blank=True, null=True)
 
 
 class Inventory(models.Model):
     barcode = models.PositiveIntegerField(unique=True)
-    parent = models.ForeignKey(
-        "self", models.SET_NULL, to_field="barcode", blank=True, null=True
-    )
+    parent = models.ForeignKey('self', models.SET_NULL, to_field='barcode', blank=True, null=True)
     name = models.CharField(blank=False, max_length=20)
 
     class Meta:
-        ordering = ("name",)
+        ordering = ('name',)
 
     def __str__(self):
         return self.name
@@ -290,7 +261,7 @@ class Book(models.Model):
     special_id = models.IntegerField(blank=True, null=True, unique=True)
 
     class Meta:
-        unique_together = ("title", "author")
+        unique_together = ('title', 'author')
 
 
 class BookXtra(models.Model):
@@ -299,7 +270,7 @@ class BookXtra(models.Model):
     suffix2 = models.IntegerField(blank=True, default=0)
 
     class Meta:
-        unique_together = ("suffix1", "suffix2")
+        unique_together = (('suffix1', 'suffix2'))
         abstract = True
 
 
@@ -312,16 +283,16 @@ class ExplicitPK(models.Model):
     desc = models.CharField(max_length=20, blank=True, unique=True)
 
     class Meta:
-        unique_together = ("key", "desc")
+        unique_together = ('key', 'desc')
 
     def __str__(self):
         return self.key
 
 
 class Post(models.Model):
-    title = models.CharField(max_length=50, unique_for_date="posted", blank=True)
-    slug = models.CharField(max_length=50, unique_for_year="posted", blank=True)
-    subtitle = models.CharField(max_length=50, unique_for_month="posted", blank=True)
+    title = models.CharField(max_length=50, unique_for_date='posted', blank=True)
+    slug = models.CharField(max_length=50, unique_for_year='posted', blank=True)
+    subtitle = models.CharField(max_length=50, unique_for_month='posted', blank=True)
     posted = models.DateField()
 
     def __str__(self):
@@ -329,9 +300,9 @@ class Post(models.Model):
 
 
 class DateTimePost(models.Model):
-    title = models.CharField(max_length=50, unique_for_date="posted", blank=True)
-    slug = models.CharField(max_length=50, unique_for_year="posted", blank=True)
-    subtitle = models.CharField(max_length=50, unique_for_month="posted", blank=True)
+    title = models.CharField(max_length=50, unique_for_date='posted', blank=True)
+    slug = models.CharField(max_length=50, unique_for_year='posted', blank=True)
+    subtitle = models.CharField(max_length=50, unique_for_month='posted', blank=True)
     posted = models.DateTimeField(editable=False)
 
     def __str__(self):
@@ -368,13 +339,13 @@ class CustomFieldForExclusionModel(models.Model):
 
 
 class FlexibleDatePost(models.Model):
-    title = models.CharField(max_length=50, unique_for_date="posted", blank=True)
-    slug = models.CharField(max_length=50, unique_for_year="posted", blank=True)
-    subtitle = models.CharField(max_length=50, unique_for_month="posted", blank=True)
+    title = models.CharField(max_length=50, unique_for_date='posted', blank=True)
+    slug = models.CharField(max_length=50, unique_for_year='posted', blank=True)
+    subtitle = models.CharField(max_length=50, unique_for_month='posted', blank=True)
     posted = models.DateField(blank=True, null=True)
 
 
-class Color(models.Model):
+class Colour(models.Model):
     name = models.CharField(max_length=50)
 
     def __iter__(self):
@@ -384,33 +355,29 @@ class Color(models.Model):
         return self.name
 
 
-class ColorfulItem(models.Model):
+class ColourfulItem(models.Model):
     name = models.CharField(max_length=50)
-    colors = models.ManyToManyField(Color)
+    colours = models.ManyToManyField(Colour)
 
 
 class CustomErrorMessage(models.Model):
     name1 = models.CharField(
         max_length=50,
         validators=[validators.validate_slug],
-        error_messages={"invalid": "Model custom error message."},
+        error_messages={'invalid': 'Model custom error message.'},
     )
     name2 = models.CharField(
         max_length=50,
         validators=[validators.validate_slug],
-        error_messages={"invalid": "Model custom error message."},
+        error_messages={'invalid': 'Model custom error message.'},
     )
 
     def clean(self):
-        if self.name1 == "FORBIDDEN_VALUE":
-            raise ValidationError(
-                {"name1": [ValidationError("Model.clean() error messages.")]}
-            )
-        elif self.name1 == "FORBIDDEN_VALUE2":
-            raise ValidationError(
-                {"name1": "Model.clean() error messages (simpler syntax)."}
-            )
-        elif self.name1 == "GLOBAL_ERROR":
+        if self.name1 == 'FORBIDDEN_VALUE':
+            raise ValidationError({'name1': [ValidationError('Model.clean() error messages.')]})
+        elif self.name1 == 'FORBIDDEN_VALUE2':
+            raise ValidationError({'name1': 'Model.clean() error messages (simpler syntax).'})
+        elif self.name1 == 'GLOBAL_ERROR':
             raise ValidationError("Global error message.")
 
 
@@ -426,23 +393,15 @@ class Character(models.Model):
     username = models.CharField(max_length=100)
     last_action = models.DateTimeField()
 
-    def __str__(self):
-        return self.username
-
 
 class StumpJoke(models.Model):
     most_recently_fooled = models.ForeignKey(
         Character,
         models.CASCADE,
         limit_choices_to=today_callable_dict,
-        related_name="jokes",
+        related_name="+",
     )
-    has_fooled_today = models.ManyToManyField(
-        Character,
-        limit_choices_to=today_callable_q,
-        related_name="jokes_today",
-    )
-    funny = models.BooleanField(default=False)
+    has_fooled_today = models.ManyToManyField(Character, limit_choices_to=today_callable_q, related_name="+")
 
 
 # Model for #13776
@@ -454,7 +413,7 @@ class Student(models.Model):
 # Model for #639
 class Photo(models.Model):
     title = models.CharField(max_length=30)
-    image = models.FileField(storage=temp_storage, upload_to="tests")
+    image = models.FileField(storage=temp_storage, upload_to='tests')
 
     # Support code for the tests; this keeps track of how many times save()
     # gets called on each instance.
@@ -463,7 +422,7 @@ class Photo(models.Model):
         self._savecount = 0
 
     def save(self, force_insert=False, force_update=False):
-        super().save(force_insert=force_insert, force_update=force_update)
+        super().save(force_insert, force_update)
         self._savecount += 1
 
 
@@ -479,7 +438,7 @@ class StrictAssignmentFieldSpecific(models.Model):
 
     def __setattr__(self, key, value):
         if self._should_error is True:
-            raise ValidationError(message={key: "Cannot set attribute"}, code="invalid")
+            raise ValidationError(message={key: "Cannot set attribute"}, code='invalid')
         super().__setattr__(key, value)
 
 
@@ -489,7 +448,7 @@ class StrictAssignmentAll(models.Model):
 
     def __setattr__(self, key, value):
         if self._should_error is True:
-            raise ValidationError(message="Cannot set attribute", code="invalid")
+            raise ValidationError(message="Cannot set attribute", code='invalid')
         super().__setattr__(key, value)
 
 
@@ -501,64 +460,3 @@ class Award(models.Model):
 
 class NullableUniqueCharFieldModel(models.Model):
     codename = models.CharField(max_length=50, blank=True, null=True, unique=True)
-    email = models.EmailField(blank=True, null=True)
-    slug = models.SlugField(blank=True, null=True)
-    url = models.URLField(blank=True, null=True)
-
-
-class Number(models.Model):
-    value = models.IntegerField()
-
-
-class NumbersToDice(models.Model):
-    number = models.ForeignKey("Number", on_delete=models.CASCADE)
-    die = models.ForeignKey("Dice", on_delete=models.CASCADE)
-
-
-class Dice(models.Model):
-    numbers = models.ManyToManyField(
-        Number,
-        through=NumbersToDice,
-        limit_choices_to=models.Q(value__gte=1),
-    )
-
-
-class ConstraintsModel(models.Model):
-    name = models.CharField(max_length=100)
-    category = models.CharField(max_length=50, default="uncategorized")
-    price = models.DecimalField(max_digits=10, decimal_places=2, default=0)
-
-    class Meta:
-        required_db_features = {"supports_table_check_constraints"}
-        constraints = [
-            models.UniqueConstraint(
-                "name",
-                "category",
-                name="unique_name_category",
-                violation_error_message="This product already exists.",
-            ),
-            models.CheckConstraint(
-                condition=models.Q(price__gt=0),
-                name="price_gte_zero",
-                violation_error_message="Price must be greater than zero.",
-            ),
-        ]
-
-
-class AttnameConstraintsModel(models.Model):
-    left = models.ForeignKey(
-        "self", related_name="+", null=True, on_delete=models.SET_NULL
-    )
-    right = models.ForeignKey(
-        "self", related_name="+", null=True, on_delete=models.SET_NULL
-    )
-
-    class Meta:
-        required_db_features = {"supports_table_check_constraints"}
-        constraints = [
-            models.CheckConstraint(
-                name="%(app_label)s_%(class)s_left_not_right",
-                # right_id here is the ForeignKey's attname, not name.
-                condition=~models.Q(left=models.F("right_id")),
-            ),
-        ]

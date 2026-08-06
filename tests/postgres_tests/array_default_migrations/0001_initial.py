@@ -3,27 +3,19 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-    dependencies = []
+
+    dependencies = [
+    ]
 
     operations = [
         migrations.CreateModel(
-            name="IntegerArrayDefaultModel",
+            name='IntegerArrayDefaultModel',
             fields=[
-                (
-                    "id",
-                    models.BigAutoField(
-                        verbose_name="ID",
-                        serialize=False,
-                        auto_created=True,
-                        primary_key=True,
-                    ),
-                ),
-                (
-                    "field",
-                    django.contrib.postgres.fields.ArrayField(models.IntegerField()),
-                ),
+                ('id', models.AutoField(verbose_name='ID', serialize=False, auto_created=True, primary_key=True)),
+                ('field', django.contrib.postgres.fields.ArrayField(models.IntegerField(), size=None)),
             ],
-            options={},
+            options={
+            },
             bases=(models.Model,),
         ),
     ]

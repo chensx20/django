@@ -4,7 +4,7 @@ from django.contrib.redirects.models import Redirect
 from django.contrib.sites.shortcuts import get_current_site
 from django.core.exceptions import ImproperlyConfigured
 from django.http import HttpResponseGone, HttpResponsePermanentRedirect
-from django.middleware import MiddlewareMixin
+from django.utils.deprecation import MiddlewareMixin
 
 
 class RedirectFallbackMiddleware(MiddlewareMixin):
@@ -12,8 +12,8 @@ class RedirectFallbackMiddleware(MiddlewareMixin):
     response_gone_class = HttpResponseGone
     response_redirect_class = HttpResponsePermanentRedirect
 
-    def __init__(self, get_response):
-        if not apps.is_installed("django.contrib.sites"):
+    def __init__(self, get_response=None):
+        if not apps.is_installed('django.contrib.sites'):
             raise ImproperlyConfigured(
                 "You cannot use RedirectFallbackMiddleware when "
                 "django.contrib.sites is not installed."
@@ -33,7 +33,7 @@ class RedirectFallbackMiddleware(MiddlewareMixin):
             r = Redirect.objects.get(site=current_site, old_path=full_path)
         except Redirect.DoesNotExist:
             pass
-        if r is None and settings.APPEND_SLASH and not request.path.endswith("/"):
+        if r is None and settings.APPEND_SLASH and not request.path.endswith('/'):
             try:
                 r = Redirect.objects.get(
                     site=current_site,
@@ -42,7 +42,7 @@ class RedirectFallbackMiddleware(MiddlewareMixin):
             except Redirect.DoesNotExist:
                 pass
         if r is not None:
-            if r.new_path == "":
+            if r.new_path == '':
                 return self.response_gone_class()
             return self.response_redirect_class(r.new_path)
 

@@ -19,7 +19,6 @@ Introductions to all the key parts of Django you'll need to know:
    auth/index
    cache
    conditional-view-processing
-   composite-primary-key
    signing
    email
    i18n/index
@@ -31,5 +30,4 @@ Introductions to all the key parts of Django you'll need to know:
    settings
    signals
    checks
-   async
-   tasks
+   external-packages

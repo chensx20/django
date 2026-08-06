@@ -12,6 +12,9 @@ class AbstractArticle(models.Model):
     class Meta:
         abstract = True
 
+    def __str__(self):
+        return self.title
+
 
 class SyndicatedArticle(AbstractArticle):
     sites = models.ManyToManyField(Site)

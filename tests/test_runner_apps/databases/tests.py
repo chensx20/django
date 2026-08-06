@@ -7,17 +7,12 @@ class NoDatabaseTests(unittest.TestCase):
 
 
 class DefaultDatabaseTests(NoDatabaseTests):
-    databases = {"default"}
-
-
-class DefaultDatabaseSerializedTests(NoDatabaseTests):
-    databases = {"default"}
-    serialized_rollback = True
+    databases = {'default'}
 
 
 class OtherDatabaseTests(NoDatabaseTests):
-    databases = {"other"}
+    databases = {'other'}
 
 
 class AllDatabasesTests(NoDatabaseTests):
-    databases = "__all__"
+    databases = '__all__'

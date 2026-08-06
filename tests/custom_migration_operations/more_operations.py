@@ -6,7 +6,11 @@ class TestOperation(Operation):
         pass
 
     def deconstruct(self):
-        return (self.__class__.__name__, [], {})
+        return (
+            self.__class__.__name__,
+            [],
+            {}
+        )
 
     @property
     def reversible(self):

@@ -1,21 +1,12 @@
-import warnings
 from contextlib import ContextDecorator, contextmanager
-from functools import wraps
 
 from django.db import (
-    DEFAULT_DB_ALIAS,
-    DatabaseError,
-    Error,
-    ProgrammingError,
-    connections,
+    DEFAULT_DB_ALIAS, DatabaseError, Error, ProgrammingError, connections,
 )
-from django.utils.deprecation import RemovedInDjango70Warning
-from django.utils.warnings import django_file_prefixes
 
 
 class TransactionManagementError(ProgrammingError):
     """Transaction management is used improperly."""
-
     pass
 
 
@@ -50,15 +41,6 @@ def rollback(using=None):
 
 
 def savepoint(using=None):
-    warnings.warn(
-        "savepoint() is deprecated. Use savepoint_create() instead.",
-        category=RemovedInDjango70Warning,
-        skip_file_prefixes=django_file_prefixes(),
-    )
-    return savepoint_create(using=using)
-
-
-def savepoint_create(using=None):
     """
     Create a savepoint (if supported and required by the backend) inside the
     current transaction. Return an identifier for the savepoint that will be
@@ -131,26 +113,24 @@ def mark_for_rollback_on_error(using=None):
     """
     try:
         yield
-    except Exception as exc:
+    except Exception:
         connection = get_connection(using)
         if connection.in_atomic_block:
             connection.needs_rollback = True
-            connection.rollback_exc = exc
         raise
 
 
-def on_commit(func, using=None, robust=False):
+def on_commit(func, using=None):
     """
     Register `func` to be called when the current transaction is committed.
     If the current transaction is rolled back, `func` will not be called.
     """
-    get_connection(using).on_commit(func, robust)
+    get_connection(using).on_commit(func)
 
 
 #################################
 # Decorators / context managers #
 #################################
-
 
 class Atomic(ContextDecorator):
     """
@@ -169,7 +149,7 @@ class Atomic(ContextDecorator):
     It's possible to disable the creation of savepoints if the goal is to
     ensure that some code runs within a transaction without creating overhead.
 
-    A stack of savepoint identifiers is maintained as an attribute of the
+    A stack of savepoints identifiers is maintained as an attribute of the
     connection. None denotes the absence of a savepoint.
 
     This allows reentrancy even if the same AtomicWrapper is reused. For
@@ -178,32 +158,16 @@ class Atomic(ContextDecorator):
 
     Since database connections are thread-local, this is thread-safe.
 
-    An atomic block can be tagged as durable. In this case, a RuntimeError is
-    raised if it's nested within another atomic block. This guarantees
-    that database changes in a durable block are committed to the database when
-    the block exits without error.
-
     This is a private API.
     """
 
-    def __init__(self, using, savepoint, durable):
+    def __init__(self, using, savepoint):
         self.using = using
         self.savepoint = savepoint
-        self.durable = durable
-        self._from_testcase = False
 
     def __enter__(self):
         connection = get_connection(self.using)
 
-        if (
-            self.durable
-            and connection.atomic_blocks
-            and not connection.atomic_blocks[-1]._from_testcase
-        ):
-            raise RuntimeError(
-                "A durable atomic block cannot be nested within another "
-                "atomic block."
-            )
         if not connection.in_atomic_block:
             # Reset state when entering an outermost atomic block.
             connection.commit_on_exit = True
@@ -226,19 +190,11 @@ class Atomic(ContextDecorator):
             else:
                 connection.savepoint_ids.append(None)
         else:
-            connection.set_autocommit(
-                False, force_begin_transaction_with_broken_autocommit=True
-            )
+            connection.set_autocommit(False, force_begin_transaction_with_broken_autocommit=True)
             connection.in_atomic_block = True
-
-        if connection.in_atomic_block:
-            connection.atomic_blocks.append(self)
 
     def __exit__(self, exc_type, exc_value, traceback):
         connection = get_connection(self.using)
-
-        if connection.in_atomic_block:
-            connection.atomic_blocks.pop()
 
         if connection.savepoint_ids:
             sid = connection.savepoint_ids.pop()
@@ -265,9 +221,9 @@ class Atomic(ContextDecorator):
                                 # minimize overhead for the database server.
                                 connection.savepoint_commit(sid)
                             except Error:
-                                # If rolling back to a savepoint fails, mark
-                                # for rollback at a higher level and avoid
-                                # shadowing the original exception.
+                                # If rolling back to a savepoint fails, mark for
+                                # rollback at a higher level and avoid shadowing
+                                # the original exception.
                                 connection.needs_rollback = True
                             raise
                 else:
@@ -283,8 +239,8 @@ class Atomic(ContextDecorator):
                             connection.close()
                         raise
             else:
-                # This flag will be set to True again if there isn't a
-                # savepoint allowing to perform the rollback at this level.
+                # This flag will be set to True again if there isn't a savepoint
+                # allowing to perform the rollback at this level.
                 connection.needs_rollback = False
                 if connection.in_atomic_block:
                     # Roll back to savepoint if there is one, mark for rollback
@@ -326,28 +282,22 @@ class Atomic(ContextDecorator):
                     connection.in_atomic_block = False
 
 
-def atomic(using=None, savepoint=True, durable=False):
+def atomic(using=None, savepoint=True):
     # Bare decorator: @atomic -- although the first argument is called
     # `using`, it's actually the function being decorated.
     if callable(using):
-        return Atomic(DEFAULT_DB_ALIAS, savepoint, durable)(using)
+        return Atomic(DEFAULT_DB_ALIAS, savepoint)(using)
     # Decorator: @atomic(...) or context manager: with atomic(...): ...
     else:
-        return Atomic(using, savepoint, durable)
+        return Atomic(using, savepoint)
 
 
 def _non_atomic_requests(view, using):
     try:
-        databases = view._non_atomic_requests | {using}
+        view._non_atomic_requests.add(using)
     except AttributeError:
-        databases = {using}
-
-    @wraps(view)
-    def wrapper(*args, **kwargs):
-        return view(*args, **kwargs)
-
-    wrapper._non_atomic_requests = databases
-    return wrapper
+        view._non_atomic_requests = {using}
+    return view
 
 
 def non_atomic_requests(using=None):

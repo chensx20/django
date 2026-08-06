@@ -15,9 +15,7 @@ from django.db import models
 
 class Category(models.Model):
     name = models.CharField(max_length=20)
-    parent = models.ForeignKey(
-        "self", models.SET_NULL, blank=True, null=True, related_name="child_set"
-    )
+    parent = models.ForeignKey('self', models.SET_NULL, blank=True, null=True, related_name='child_set')
 
     def __str__(self):
         return self.name
@@ -25,12 +23,8 @@ class Category(models.Model):
 
 class Person(models.Model):
     full_name = models.CharField(max_length=20)
-    mother = models.ForeignKey(
-        "self", models.SET_NULL, null=True, related_name="mothers_child_set"
-    )
-    father = models.ForeignKey(
-        "self", models.SET_NULL, null=True, related_name="fathers_child_set"
-    )
+    mother = models.ForeignKey('self', models.SET_NULL, null=True, related_name='mothers_child_set')
+    father = models.ForeignKey('self', models.SET_NULL, null=True, related_name='fathers_child_set')
 
     def __str__(self):
         return self.full_name

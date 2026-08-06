@@ -2,7 +2,7 @@
 Django
 ======
 
-Django is a high-level Python web framework that encourages rapid development
+Django is a high-level Python Web framework that encourages rapid development
 and clean, pragmatic design. Thanks for checking it out.
 
 All documentation is in the "``docs``" directory and online at
@@ -24,16 +24,17 @@ here's how we recommend you read the docs:
 * See ``docs/README`` for instructions on building an HTML version of the docs.
 
 Docs are updated rigorously. If you find any problems in the docs, or think
-they should be clarified in any way, please take 30 seconds to
-`fill out a ticket <https://code.djangoproject.com/newticket>`_. You can log in
-with your GitHub account, or with a DjangoProject account if you have one. Once
-you log in, a New Ticket button is available next to View Tickets.
+they should be clarified in any way, please take 30 seconds to fill out a
+ticket here: https://code.djangoproject.com/newticket
 
 To get more help:
 
-* Join the `Django Discord community <https://chat.djangoproject.com>`_.
+* Join the ``#django`` channel on irc.freenode.net. Lots of helpful people hang
+  out there. See https://en.wikipedia.org/wiki/Wikipedia:IRC/Tutorial if you're
+  new to IRC.
 
-* Join the community on the `Django Forum <https://forum.djangoproject.com/>`_.
+* Join the django-users mailing list, or read the archives, at
+  https://groups.google.com/group/django-users.
 
 To contribute to Django:
 
@@ -45,10 +46,3 @@ To run Django's test suite:
 * Follow the instructions in the "Unit tests" section of
   ``docs/internals/contributing/writing-code/unit-tests.txt``, published online at
   https://docs.djangoproject.com/en/dev/internals/contributing/writing-code/unit-tests/#running-the-unit-tests
-
-Supporting the Development of Django
-====================================
-
-Django's development depends on your contributions.
-
-If you depend on Django, remember to support the Django Software Foundation: https://www.djangoproject.com/fundraising/

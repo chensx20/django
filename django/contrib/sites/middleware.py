@@ -1,4 +1,4 @@
-from django.middleware import MiddlewareMixin
+from django.utils.deprecation import MiddlewareMixin
 
 from .shortcuts import get_current_site
 

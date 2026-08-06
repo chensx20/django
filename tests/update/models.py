@@ -10,12 +10,17 @@ class DataPoint(models.Model):
     name = models.CharField(max_length=20)
     value = models.CharField(max_length=20)
     another_value = models.CharField(max_length=20, blank=True)
-    is_active = models.BooleanField(default=True)
+
+    def __str__(self):
+        return self.name
 
 
 class RelatedPoint(models.Model):
     name = models.CharField(max_length=20)
     data = models.ForeignKey(DataPoint, models.CASCADE)
+
+    def __str__(self):
+        return self.name
 
 
 class A(models.Model):
@@ -40,17 +45,5 @@ class Foo(models.Model):
 
 
 class Bar(models.Model):
-    foo = models.ForeignKey(Foo, models.CASCADE, to_field="target")
-    o2o_foo = models.OneToOneField(
-        Foo, models.CASCADE, related_name="o2o_bar", null=True
-    )
-    m2m_foo = models.ManyToManyField(Foo, related_name="m2m_foo")
-    x = models.IntegerField(default=0)
-
-
-class UniqueNumber(models.Model):
-    number = models.IntegerField(unique=True)
-
-
-class UniqueNumberChild(UniqueNumber):
-    pass
+    foo = models.ForeignKey(Foo, models.CASCADE, to_field='target')
+    m2m_foo = models.ManyToManyField(Foo, related_name='m2m_foo')

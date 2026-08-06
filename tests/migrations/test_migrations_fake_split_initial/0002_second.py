@@ -2,6 +2,7 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
+
     initial = True
 
     dependencies = [
@@ -14,10 +15,7 @@ class Migration(migrations.Migration):
             "Book",
             [
                 ("id", models.AutoField(primary_key=True)),
-                (
-                    "author",
-                    models.ForeignKey("migrations.Author", models.SET_NULL, null=True),
-                ),
+                ("author", models.ForeignKey("migrations.Author", models.SET_NULL, null=True)),
             ],
         ),
     ]

@@ -1,107 +1,63 @@
-import warnings
+from django.contrib.postgres.fields import ArrayField, JSONField
+from django.db.models.aggregates import Aggregate
 
-from django.contrib.postgres.fields import ArrayField
-from django.db.models import Aggregate
-from django.db.models import BitAnd as _BitAnd
-from django.db.models import BitOr as _BitOr
-from django.db.models import BitXor as _BitXor
-from django.db.models import BooleanField, JSONField
-from django.db.models import StringAgg as _StringAgg
-from django.db.models import Value
-from django.utils.deprecation import RemovedInDjango70Warning
+from .mixins import OrderableAggMixin
 
 __all__ = [
-    "ArrayAgg",
-    "BitAnd",  # RemovedInDjango70Warning
-    "BitOr",  # RemovedInDjango70Warning
-    "BitXor",  # RemovedInDjango70Warning
-    "BoolAnd",
-    "BoolOr",
-    "JSONBAgg",
-    "StringAgg",  # RemovedInDjango70Warning.
+    'ArrayAgg', 'BitAnd', 'BitOr', 'BoolAnd', 'BoolOr', 'JSONBAgg', 'StringAgg',
 ]
 
 
-class ArrayAgg(Aggregate):
-    function = "ARRAY_AGG"
+class ArrayAgg(OrderableAggMixin, Aggregate):
+    function = 'ARRAY_AGG'
+    template = '%(function)s(%(distinct)s%(expressions)s %(ordering)s)'
     allow_distinct = True
-    allow_order_by = True
 
     @property
     def output_field(self):
         return ArrayField(self.source_expressions[0].output_field)
 
-
-class BitAnd(_BitAnd):
-    def __init__(self, expression, **extra):
-        warnings.warn(
-            "The PostgreSQL-specific BitAnd function is deprecated. Use "
-            "django.db.models.aggregates.BitAnd instead.",
-            category=RemovedInDjango70Warning,
-            stacklevel=2,
-        )
-        super().__init__(expression, **extra)
+    def convert_value(self, value, expression, connection):
+        if not value:
+            return []
+        return value
 
 
-class BitOr(_BitOr):
-    def __init__(self, expression, **extra):
-        warnings.warn(
-            "The PostgreSQL-specific BitOr function is deprecated. Use "
-            "django.db.models.aggregates.BitOr instead.",
-            category=RemovedInDjango70Warning,
-            stacklevel=2,
-        )
-        super().__init__(expression, **extra)
+class BitAnd(Aggregate):
+    function = 'BIT_AND'
 
 
-class BitXor(_BitXor):
-    def __init__(self, expression, **extra):
-        warnings.warn(
-            "The PostgreSQL-specific BitXor function is deprecated. Use "
-            "django.db.models.aggregates.BitXor instead.",
-            category=RemovedInDjango70Warning,
-            stacklevel=2,
-        )
-        super().__init__(expression, **extra)
+class BitOr(Aggregate):
+    function = 'BIT_OR'
 
 
 class BoolAnd(Aggregate):
-    function = "BOOL_AND"
-    output_field = BooleanField()
+    function = 'BOOL_AND'
 
 
 class BoolOr(Aggregate):
-    function = "BOOL_OR"
-    output_field = BooleanField()
+    function = 'BOOL_OR'
 
 
 class JSONBAgg(Aggregate):
-    function = "JSONB_AGG"
-    allow_distinct = True
-    allow_order_by = True
+    function = 'JSONB_AGG'
     output_field = JSONField()
 
+    def convert_value(self, value, expression, connection):
+        if not value:
+            return []
+        return value
 
-# RemovedInDjango70Warning: When the deprecation ends, remove completely.
-class StringAgg(_StringAgg):
+
+class StringAgg(OrderableAggMixin, Aggregate):
+    function = 'STRING_AGG'
+    template = "%(function)s(%(distinct)s%(expressions)s, '%(delimiter)s'%(ordering)s)"
+    allow_distinct = True
 
     def __init__(self, expression, delimiter, **extra):
-        if isinstance(delimiter, str):
-            warnings.warn(
-                "delimiter: str will be resolved as a field reference instead "
-                "of a string literal on Django 7.0. Pass "
-                f"`delimiter=Value({delimiter!r})` to preserve the previous behavior.",
-                category=RemovedInDjango70Warning,
-                stacklevel=2,
-            )
+        super().__init__(expression, delimiter=delimiter, **extra)
 
-            delimiter = Value(delimiter)
-
-        warnings.warn(
-            "The PostgreSQL specific StringAgg function is deprecated. Use "
-            "django.db.models.aggregates.StringAgg instead.",
-            category=RemovedInDjango70Warning,
-            stacklevel=2,
-        )
-
-        super().__init__(expression, delimiter, **extra)
+    def convert_value(self, value, expression, connection):
+        if not value:
+            return ''
+        return value

@@ -25,8 +25,8 @@ You'll usually use one of these methods to access the uploaded content:
 .. method:: UploadedFile.multiple_chunks(chunk_size=None)
 
     Returns ``True`` if the uploaded file is big enough to require reading in
-    multiple chunks. By default this will be any file larger than 2.5
-    megabytes, but that's configurable; see below.
+    multiple chunks. By default this will be any file larger than 2.5 megabytes,
+    but that's configurable; see below.
 
 .. method:: UploadedFile.chunks(chunk_size=None)
 
@@ -61,7 +61,9 @@ Here are some useful attributes of ``UploadedFile``:
     header. This is typically provided by services, such as Google App Engine,
     that intercept and handle file uploads on your behalf. As a result your
     handler may not receive the uploaded file content, but instead a URL or
-    other pointer to the file (see :rfc:`RFC 2388 <2388#section-5.3>`).
+    other pointer to the file. (see `RFC 2388`_ section 5.3).
+
+    .. _RFC 2388: https://www.ietf.org/rfc/rfc2388.txt
 
 .. attribute:: UploadedFile.charset
 
@@ -71,14 +73,18 @@ Here are some useful attributes of ``UploadedFile``:
 .. note::
 
     Like regular Python files, you can read the file line-by-line by iterating
-    over the uploaded file::
+    over the uploaded file:
+
+    .. code-block:: python
 
         for line in uploadedfile:
             do_something_with(line)
 
-    Lines are split using :term:`python:universal newlines`. The following are
-    recognized as ending a line: the Unix end-of-line convention ``'\n'``, the
-    Windows convention ``'\r\n'``, and the old Macintosh convention ``'\r'``.
+    Lines are split using `universal newlines`_. The following are recognized
+    as ending a line: the Unix end-of-line convention ``'\n'``, the Windows
+    convention ``'\r\n'``, and the old Macintosh convention ``'\r'``.
+
+    .. _universal newlines: https://www.python.org/dev/peps/pep-0278
 
 Subclasses of ``UploadedFile`` include:
 
@@ -211,11 +217,6 @@ attributes:
 .. method:: FileUploadHandler.upload_complete()
 
     Callback signaling that the entire upload (all files) has completed.
-
-.. method:: FileUploadHandler.upload_interrupted()
-
-    Callback signaling that the upload was interrupted, e.g. when the user
-    closed their browser during file upload.
 
 .. method:: FileUploadHandler.handle_raw_input(input_data, META, content_length, boundary, encoding)
 

@@ -2,6 +2,7 @@ from django.db import migrations
 
 
 class Migration(migrations.Migration):
+
     replaces = [
         ("app1", "2_auto"),
         ("app1", "3_auto"),

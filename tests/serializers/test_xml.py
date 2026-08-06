@@ -4,7 +4,6 @@ from django.core import serializers
 from django.core.serializers.xml_serializer import DTDForbidden
 from django.test import TestCase, TransactionTestCase
 
-from .models import Actor
 from .tests import SerializersTestBase, SerializersTransactionTestBase
 
 
@@ -25,12 +24,8 @@ class XmlSerializerTestCase(SerializersTestBase, TestCase):
     <field name="author" rel="ManyToOneRel" to="serializers.author">%(author_pk)s</field>
     <field name="headline" type="CharField">Poker has no place on ESPN</field>
     <field name="pub_date" type="DateTimeField">2006-06-16T11:00:00</field>
-    <field name="categories" rel="ManyToManyRel" to="serializers.category">
-      <object pk="%(first_category_pk)s"></object>
-      <object pk="%(second_category_pk)s"></object>
-    </field>
+    <field name="categories" rel="ManyToManyRel" to="serializers.category"><object pk="%(first_category_pk)s"></object><object pk="%(second_category_pk)s"></object></field>
     <field name="meta_data" rel="ManyToManyRel" to="serializers.categorymetadata"></field>
-    <field name="topics" rel="ManyToManyRel" to="serializers.topic"></field>
   </object>
 </django-objects>"""  # NOQA
 
@@ -74,17 +69,11 @@ class XmlSerializerTestCase(SerializersTestBase, TestCase):
         msg = "Article.headline (pk:%s) contains unserializable characters" % self.a1.pk
         with self.assertRaisesMessage(ValueError, msg):
             serializers.serialize(self.serializer_name, [self.a1])
-        self.a1.headline = "HT \u0009, LF \u000a, and CR \u000d are allowed"
+        self.a1.headline = "HT \u0009, LF \u000A, and CR \u000D are allowed"
         self.assertIn(
             "HT \t, LF \n, and CR \r are allowed",
-            serializers.serialize(self.serializer_name, [self.a1]),
+            serializers.serialize(self.serializer_name, [self.a1])
         )
-
-    def test_control_char_failure_attribute(self):
-        actor = Actor.objects.create(pk="\u0001")
-        msg = "Actor (pk:%s) contains unserializable characters" % actor.pk
-        with self.assertRaisesMessage(ValueError, msg):
-            serializers.serialize(self.serializer_name, [actor])
 
     def test_no_dtd(self):
         """
@@ -93,17 +82,12 @@ class XmlSerializerTestCase(SerializersTestBase, TestCase):
         This is the most straightforward way to prevent all entity definitions
         and avoid both external entities and entity-expansion attacks.
         """
-        xml = (
-            '<?xml version="1.0" standalone="no"?>'
-            '<!DOCTYPE example SYSTEM "http://example.com/example.dtd">'
-        )
+        xml = '<?xml version="1.0" standalone="no"?><!DOCTYPE example SYSTEM "http://example.com/example.dtd">'
         with self.assertRaises(DTDForbidden):
-            next(serializers.deserialize("xml", xml))
+            next(serializers.deserialize('xml', xml))
 
 
-class XmlSerializerTransactionTestCase(
-    SerializersTransactionTestBase, TransactionTestCase
-):
+class XmlSerializerTransactionTestCase(SerializersTransactionTestBase, TransactionTestCase):
     serializer_name = "xml"
     fwd_ref_str = """<?xml version="1.0" encoding="utf-8"?>
 <django-objects version="1.0">
@@ -121,4 +105,4 @@ class XmlSerializerTransactionTestCase(
     </object>
     <object pk="1" model="serializers.category">
         <field type="CharField" name="name">Reference</field></object>
-</django-objects>"""  # NOQA
+</django-objects>"""

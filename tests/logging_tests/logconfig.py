@@ -1,6 +1,7 @@
 import logging
 
 from django.conf import settings
+from django.core.mail.backends.base import BaseEmailBackend
 from django.views.debug import ExceptionReporter
 
 
@@ -10,6 +11,11 @@ class MyHandler(logging.Handler):
         self.config = settings.LOGGING
 
 
+class MyEmailBackend(BaseEmailBackend):
+    def send_messages(self, email_messages):
+        pass
+
+
 class CustomExceptionReporter(ExceptionReporter):
     def get_traceback_text(self):
-        return "custom traceback text"
+        return 'custom traceback text'

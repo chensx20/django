@@ -3,19 +3,22 @@ from django.db import models
 
 class Article(models.Model):
     CHOICES = (
-        (1, "first"),
-        (2, "second"),
+        (1, 'first'),
+        (2, 'second'),
     )
-    headline = models.CharField(max_length=100, default="Default headline")
+    headline = models.CharField(max_length=100, default='Default headline')
     pub_date = models.DateTimeField()
     status = models.IntegerField(blank=True, null=True, choices=CHOICES)
     misc_data = models.CharField(max_length=100, blank=True)
     article_text = models.TextField()
 
     class Meta:
-        ordering = ("pub_date", "headline")
+        ordering = ('pub_date', 'headline')
         # A utf-8 verbose name (Ångström's Articles) to test they are valid.
         verbose_name = "\xc3\x85ngstr\xc3\xb6m's Articles"
+
+    def __str__(self):
+        return self.headline
 
 
 class Movie(models.Model):
@@ -36,6 +39,9 @@ class Department(models.Model):
     id = models.PositiveIntegerField(primary_key=True)
     name = models.CharField(max_length=200)
 
+    def __str__(self):
+        return self.name
+
 
 class Worker(models.Model):
     department = models.ForeignKey(Department, models.CASCADE)
@@ -43,10 +49,6 @@ class Worker(models.Model):
 
     def __str__(self):
         return self.name
-
-
-class WorkerProfile(models.Model):
-    worker = models.OneToOneField(Worker, on_delete=models.CASCADE)
 
 
 class NonAutoPK(models.Model):
@@ -59,8 +61,8 @@ class Model1(models.Model):
 
 
 class Model2(models.Model):
-    model1 = models.ForeignKey(Model1, models.CASCADE, unique=True, to_field="pkey")
+    model1 = models.ForeignKey(Model1, models.CASCADE, unique=True, to_field='pkey')
 
 
 class Model3(models.Model):
-    model2 = models.ForeignKey(Model2, models.CASCADE, unique=True, to_field="model1")
+    model2 = models.ForeignKey(Model2, models.CASCADE, unique=True, to_field='model1')

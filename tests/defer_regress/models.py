@@ -10,12 +10,9 @@ class Item(models.Model):
     text = models.TextField(default="xyzzy")
     value = models.IntegerField()
     other_value = models.IntegerField(default=0)
-    source = models.OneToOneField(
-        "self",
-        related_name="destination",
-        on_delete=models.CASCADE,
-        null=True,
-    )
+
+    def __str__(self):
+        return self.name
 
 
 class RelatedItem(models.Model):
@@ -35,10 +32,11 @@ class Child(models.Model):
 class Leaf(models.Model):
     name = models.CharField(max_length=10)
     child = models.ForeignKey(Child, models.CASCADE)
-    second_child = models.ForeignKey(
-        Child, models.SET_NULL, related_name="other", null=True
-    )
+    second_child = models.ForeignKey(Child, models.SET_NULL, related_name="other", null=True)
     value = models.IntegerField(default=42)
+
+    def __str__(self):
+        return self.name
 
 
 class ResolveThis(models.Model):
@@ -54,6 +52,9 @@ class Proxy(Item):
 class SimpleItem(models.Model):
     name = models.CharField(max_length=15)
     value = models.IntegerField()
+
+    def __str__(self):
+        return self.name
 
 
 class Feature(models.Model):
@@ -75,11 +76,11 @@ class ItemAndSimpleItem(models.Model):
 
 
 class Profile(models.Model):
-    profile1 = models.CharField(max_length=255, default="profile1")
+    profile1 = models.CharField(max_length=255, default='profile1')
 
 
 class Location(models.Model):
-    location1 = models.CharField(max_length=255, default="location1")
+    location1 = models.CharField(max_length=255, default='location1')
 
 
 class Request(models.Model):
@@ -87,10 +88,10 @@ class Request(models.Model):
     location = models.ForeignKey(Location, models.CASCADE)
     items = models.ManyToManyField(Item)
 
-    request1 = models.CharField(default="request1", max_length=255)
-    request2 = models.CharField(default="request2", max_length=255)
-    request3 = models.CharField(default="request3", max_length=255)
-    request4 = models.CharField(default="request4", max_length=255)
+    request1 = models.CharField(default='request1', max_length=255)
+    request2 = models.CharField(default='request2', max_length=255)
+    request3 = models.CharField(default='request3', max_length=255)
+    request4 = models.CharField(default='request4', max_length=255)
 
 
 class Base(models.Model):

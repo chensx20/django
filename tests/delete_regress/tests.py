@@ -1,66 +1,39 @@
 import datetime
 
 from django.db import connection, models, transaction
-from django.db.models import Exists, OuterRef
-from django.test import (
-    SimpleTestCase,
-    TestCase,
-    TransactionTestCase,
-    skipUnlessDBFeature,
-)
+from django.test import TestCase, TransactionTestCase, skipUnlessDBFeature
 
 from .models import (
-    Award,
-    AwardNote,
-    Book,
-    Child,
-    Contact,
-    Eaten,
-    Email,
-    File,
-    Food,
-    FooFile,
-    FooFileProxy,
-    FooImage,
-    FooPhoto,
-    House,
-    Image,
-    Item,
-    Location,
-    Login,
-    OrderedPerson,
-    OrgUnit,
-    Person,
-    Photo,
-    PlayedWith,
-    PlayedWithNote,
-    Policy,
-    Researcher,
-    Toy,
-    Version,
+    Award, AwardNote, Book, Child, Contact, Eaten, Email, File, Food, FooFile,
+    FooFileProxy, FooImage, FooPhoto, House, Image, Item, Location, Login,
+    OrderedPerson, OrgUnit, Person, Photo, PlayedWith, PlayedWithNote, Policy,
+    Researcher, Toy, Version,
 )
 
 
 # Can't run this test under SQLite, because you can't
 # get two connections to an in-memory database.
-@skipUnlessDBFeature("test_db_allows_multiple_connections")
+@skipUnlessDBFeature('test_db_allows_multiple_connections')
 class DeleteLockingTest(TransactionTestCase):
-    available_apps = ["delete_regress"]
+
+    available_apps = ['delete_regress']
 
     def setUp(self):
         # Create a second connection to the default database
         self.conn2 = connection.copy()
         self.conn2.set_autocommit(False)
+
+    def tearDown(self):
         # Close down the second connection.
-        self.addCleanup(self.conn2.close)
-        self.addCleanup(self.conn2.rollback)
+        self.conn2.rollback()
+        self.conn2.close()
 
     def test_concurrent_delete(self):
         """Concurrent deletes don't collide and lock the database (#9479)."""
         with transaction.atomic():
-            Book.objects.create(pagecount=100)
-            book = Book.objects.create(pagecount=200)
-            Book.objects.create(pagecount=300)
+            Book.objects.create(id=1, pagecount=100)
+            Book.objects.create(id=2, pagecount=200)
+            Book.objects.create(id=3, pagecount=300)
 
         with transaction.atomic():
             # Start a transaction on the main connection.
@@ -68,9 +41,7 @@ class DeleteLockingTest(TransactionTestCase):
 
             # Delete something using another database connection.
             with self.conn2.cursor() as cursor2:
-                cursor2.execute(
-                    "DELETE from delete_regress_book WHERE id = %s", [book.pk]
-                )
+                cursor2.execute("DELETE from delete_regress_book WHERE id = 1")
             self.conn2.commit()
 
             # In the same transaction on the main connection, perform a
@@ -88,9 +59,9 @@ class DeleteCascadeTests(TestCase):
         Django cascades deletes through generic-related objects to their
         reverse relations.
         """
-        person = Person.objects.create(name="Nelson Mandela")
-        award = Award.objects.create(name="Nobel", content_object=person)
-        AwardNote.objects.create(note="a peace prize", award=award)
+        person = Person.objects.create(name='Nelson Mandela')
+        award = Award.objects.create(name='Nobel', content_object=person)
+        AwardNote.objects.create(note='a peace prize', award=award)
         self.assertEqual(AwardNote.objects.count(), 1)
         person.delete()
         self.assertEqual(Award.objects.count(), 0)
@@ -104,12 +75,10 @@ class DeleteCascadeTests(TestCase):
         from one of the participants in the M2M, to the through model, to its
         related model.
         """
-        juan = Child.objects.create(name="Juan")
-        paints = Toy.objects.create(name="Paints")
-        played = PlayedWith.objects.create(
-            child=juan, toy=paints, date=datetime.date.today()
-        )
-        PlayedWithNote.objects.create(played=played, note="the next Jackson Pollock")
+        juan = Child.objects.create(name='Juan')
+        paints = Toy.objects.create(name='Paints')
+        played = PlayedWith.objects.create(child=juan, toy=paints, date=datetime.date.today())
+        PlayedWithNote.objects.create(played=played, note='the next Jackson Pollock')
         self.assertEqual(PlayedWithNote.objects.count(), 1)
         paints.delete()
         self.assertEqual(PlayedWith.objects.count(), 0)
@@ -117,7 +86,7 @@ class DeleteCascadeTests(TestCase):
         self.assertEqual(PlayedWithNote.objects.count(), 0)
 
     def test_15776(self):
-        policy = Policy.objects.create(policy_number="1234")
+        policy = Policy.objects.create(pk=1, policy_number="1234")
         version = Version.objects.create(policy=policy)
         location = Location.objects.create(version=version)
         Item.objects.create(version=version, location=location)
@@ -125,7 +94,8 @@ class DeleteCascadeTests(TestCase):
 
 
 class DeleteCascadeTransactionTests(TransactionTestCase):
-    available_apps = ["delete_regress"]
+
+    available_apps = ['delete_regress']
 
     def test_inheritance(self):
         """
@@ -157,16 +127,13 @@ class DeleteCascadeTransactionTests(TransactionTestCase):
 
 class LargeDeleteTests(TestCase):
     def test_large_deletes(self):
-        """
-        If the number of objects > chunk size, deletion still occurs.
-        """
+        "Regression for #13309 -- if the number of objects > chunk size, deletion still occurs"
         for x in range(300):
             Book.objects.create(pagecount=x + 100)
         # attach a signal to make sure we will not fast-delete
 
         def noop(*args, **kwargs):
             pass
-
         models.signals.post_delete.connect(noop, sender=Book)
         Book.objects.all().delete()
         models.signals.post_delete.disconnect(noop, sender=Book)
@@ -179,7 +146,6 @@ class ProxyDeleteTest(TestCase):
 
     See #16128.
     """
-
     def create_image(self):
         """Return an Image referenced by both a FooImage and a FooFile."""
         # Create an Image
@@ -275,7 +241,7 @@ class ProxyDeleteTest(TestCase):
         self.assertEqual(len(FooFileProxy.objects.all()), 0)
 
     def test_19187_values(self):
-        msg = "Cannot call delete() after .values() or .values_list()"
+        msg = 'Cannot call delete() after .values() or .values_list()'
         with self.assertRaisesMessage(TypeError, msg):
             Image.objects.values().delete()
         with self.assertRaisesMessage(TypeError, msg):
@@ -292,20 +258,21 @@ class Ticket19102Tests(TestCase):
     Note that .values() is not tested here on purpose. .values().delete()
     doesn't work for non fast-path deletes at all.
     """
-
     @classmethod
     def setUpTestData(cls):
-        cls.o1 = OrgUnit.objects.create(name="o1")
-        cls.o2 = OrgUnit.objects.create(name="o2")
-        cls.l1 = Login.objects.create(description="l1", orgunit=cls.o1)
-        cls.l2 = Login.objects.create(description="l2", orgunit=cls.o2)
+        cls.o1 = OrgUnit.objects.create(name='o1')
+        cls.o2 = OrgUnit.objects.create(name='o2')
+        cls.l1 = Login.objects.create(description='l1', orgunit=cls.o1)
+        cls.l2 = Login.objects.create(description='l2', orgunit=cls.o2)
 
     @skipUnlessDBFeature("update_can_self_select")
     def test_ticket_19102_annotate(self):
         with self.assertNumQueries(1):
-            Login.objects.order_by("description").filter(
+            Login.objects.order_by('description').filter(
                 orgunit__name__isnull=False
-            ).annotate(n=models.Count("description")).filter(
+            ).annotate(
+                n=models.Count('description')
+            ).filter(
                 n=1, pk=self.l1.pk
             ).delete()
         self.assertFalse(Login.objects.filter(pk=self.l1.pk).exists())
@@ -314,27 +281,53 @@ class Ticket19102Tests(TestCase):
     @skipUnlessDBFeature("update_can_self_select")
     def test_ticket_19102_extra(self):
         with self.assertNumQueries(1):
-            Login.objects.order_by("description").filter(
+            Login.objects.order_by('description').filter(
                 orgunit__name__isnull=False
-            ).extra(select={"extraf": "1"}).filter(pk=self.l1.pk).delete()
+            ).extra(
+                select={'extraf': '1'}
+            ).filter(
+                pk=self.l1.pk
+            ).delete()
+        self.assertFalse(Login.objects.filter(pk=self.l1.pk).exists())
+        self.assertTrue(Login.objects.filter(pk=self.l2.pk).exists())
+
+    @skipUnlessDBFeature("update_can_self_select")
+    @skipUnlessDBFeature('can_distinct_on_fields')
+    def test_ticket_19102_distinct_on(self):
+        # Both Login objs should have same description so that only the one
+        # having smaller PK will be deleted.
+        Login.objects.update(description='description')
+        with self.assertNumQueries(1):
+            Login.objects.distinct('description').order_by('pk').filter(
+                orgunit__name__isnull=False
+            ).delete()
+        # Assumed that l1 which is created first has smaller PK.
         self.assertFalse(Login.objects.filter(pk=self.l1.pk).exists())
         self.assertTrue(Login.objects.filter(pk=self.l2.pk).exists())
 
     @skipUnlessDBFeature("update_can_self_select")
     def test_ticket_19102_select_related(self):
         with self.assertNumQueries(1):
-            Login.objects.filter(pk=self.l1.pk).filter(
+            Login.objects.filter(
+                pk=self.l1.pk
+            ).filter(
                 orgunit__name__isnull=False
-            ).order_by("description").select_related("orgunit").delete()
+            ).order_by(
+                'description'
+            ).select_related('orgunit').delete()
         self.assertFalse(Login.objects.filter(pk=self.l1.pk).exists())
         self.assertTrue(Login.objects.filter(pk=self.l2.pk).exists())
 
     @skipUnlessDBFeature("update_can_self_select")
     def test_ticket_19102_defer(self):
         with self.assertNumQueries(1):
-            Login.objects.filter(pk=self.l1.pk).filter(
+            Login.objects.filter(
+                pk=self.l1.pk
+            ).filter(
                 orgunit__name__isnull=False
-            ).order_by("description").only("id").delete()
+            ).order_by(
+                'description'
+            ).only('id').delete()
         self.assertFalse(Login.objects.filter(pk=self.l1.pk).exists())
         self.assertTrue(Login.objects.filter(pk=self.l2.pk).exists())
 
@@ -344,10 +337,10 @@ class DeleteTests(TestCase):
         # When a subquery is performed by deletion code, the subquery must be
         # cleared of all ordering. There was a but that caused _meta ordering
         # to be used. Refs #19720.
-        h = House.objects.create(address="Foo")
-        OrderedPerson.objects.create(name="Jack", lives_in=h)
-        OrderedPerson.objects.create(name="Bob", lives_in=h)
-        OrderedPerson.objects.filter(lives_in__address="Foo").delete()
+        h = House.objects.create(address='Foo')
+        OrderedPerson.objects.create(name='Jack', lives_in=h)
+        OrderedPerson.objects.create(name='Bob', lives_in=h)
+        OrderedPerson.objects.filter(lives_in__address='Foo').delete()
         self.assertEqual(OrderedPerson.objects.count(), 0)
 
     def test_foreign_key_delete_nullifies_correct_columns(self):
@@ -356,8 +349,8 @@ class DeleteTests(TestCase):
         same model (Contact), deleting an instance of the target model
         (contact1) nullifies the correct fields of Researcher.
         """
-        contact1 = Contact.objects.create(label="Contact 1")
-        contact2 = Contact.objects.create(label="Contact 2")
+        contact1 = Contact.objects.create(label='Contact 1')
+        contact2 = Contact.objects.create(label='Contact 2')
         researcher1 = Researcher.objects.create(
             primary_contact=contact1,
             secondary_contact=contact2,
@@ -373,54 +366,3 @@ class DeleteTests(TestCase):
         self.assertEqual(researcher1.secondary_contact, contact2)
         self.assertEqual(researcher2.primary_contact, contact2)
         self.assertIsNone(researcher2.secondary_contact)
-
-    def test_self_reference_with_through_m2m_at_second_level(self):
-        toy = Toy.objects.create(name="Paints")
-        child = Child.objects.create(name="Juan")
-        Book.objects.create(pagecount=500, owner=child)
-        PlayedWith.objects.create(child=child, toy=toy, date=datetime.date.today())
-        with self.assertNumQueries(1) as ctx:
-            Book.objects.filter(
-                Exists(
-                    Book.objects.filter(
-                        pk=OuterRef("pk"),
-                        owner__toys=toy.pk,
-                    ),
-                )
-            ).delete()
-
-        self.assertIs(Book.objects.exists(), False)
-        sql = ctx.captured_queries[0]["sql"].lower()
-        if connection.features.delete_can_self_reference_subquery:
-            self.assertEqual(sql.count("select"), 1)
-
-
-class DeleteDistinct(SimpleTestCase):
-    def test_disallowed_delete_distinct_on(self):
-        msg = "Cannot call delete() after .distinct(*fields)."
-        with self.assertRaisesMessage(TypeError, msg):
-            Book.objects.distinct("id").delete()
-
-
-class SetQueryCountTests(TestCase):
-    def test_set_querycount(self):
-        policy = Policy.objects.create()
-        version = Version.objects.create(policy=policy)
-        location = Location.objects.create(version=version)
-        Item.objects.create(
-            version=version,
-            location=location,
-            location_value=location,
-        )
-        # 2 UPDATEs for SET of item values and one for DELETE locations.
-        with self.assertNumQueries(3):
-            location.delete()
-
-
-class SetCallableCollectorDefaultTests(TestCase):
-    def test_set(self):
-        # Collector doesn't call callables used by models.SET and
-        # models.SET_DEFAULT if not necessary.
-        Toy.objects.create(name="test")
-        Toy.objects.all().delete()
-        self.assertSequenceEqual(Toy.objects.all(), [])

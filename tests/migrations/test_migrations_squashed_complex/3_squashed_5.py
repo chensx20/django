@@ -2,6 +2,7 @@ from django.db import migrations
 
 
 class Migration(migrations.Migration):
+
     replaces = [
         ("migrations", "3_auto"),
         ("migrations", "4_auto"),
@@ -10,4 +11,6 @@ class Migration(migrations.Migration):
 
     dependencies = [("migrations", "2_auto")]
 
-    operations = [migrations.RunPython(migrations.RunPython.noop)]
+    operations = [
+        migrations.RunPython(migrations.RunPython.noop)
+    ]

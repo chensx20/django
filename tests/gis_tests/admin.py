@@ -3,4 +3,4 @@ try:
 except ImportError:
     from django.contrib import admin
 
-    admin.GISModelAdmin = admin.ModelAdmin
+    admin.OSMGeoAdmin = admin.ModelAdmin

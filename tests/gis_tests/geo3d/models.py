@@ -15,9 +15,6 @@ class City3D(NamedModel):
     point = models.PointField(dim=3)
     pointg = models.PointField(dim=3, geography=True)
 
-    class Meta:
-        required_db_features = {"supports_3d_storage"}
-
 
 class Interstate2D(NamedModel):
     line = models.LineStringField(srid=4269)
@@ -25,9 +22,6 @@ class Interstate2D(NamedModel):
 
 class Interstate3D(NamedModel):
     line = models.LineStringField(dim=3, srid=4269)
-
-    class Meta:
-        required_db_features = {"supports_3d_storage"}
 
 
 class InterstateProj2D(NamedModel):
@@ -37,9 +31,6 @@ class InterstateProj2D(NamedModel):
 class InterstateProj3D(NamedModel):
     line = models.LineStringField(dim=3, srid=32140)
 
-    class Meta:
-        required_db_features = {"supports_3d_storage"}
-
 
 class Polygon2D(NamedModel):
     poly = models.PolygonField(srid=32140)
@@ -48,28 +39,20 @@ class Polygon2D(NamedModel):
 class Polygon3D(NamedModel):
     poly = models.PolygonField(dim=3, srid=32140)
 
-    class Meta:
-        required_db_features = {"supports_3d_storage"}
-
 
 class SimpleModel(models.Model):
+
     class Meta:
         abstract = True
 
 
 class Point2D(SimpleModel):
-    point = models.PointField(null=True)
+    point = models.PointField()
 
 
 class Point3D(SimpleModel):
     point = models.PointField(dim=3)
 
-    class Meta:
-        required_db_features = {"supports_3d_storage"}
-
 
 class MultiPoint3D(SimpleModel):
     mpoint = models.MultiPointField(dim=3)
-
-    class Meta:
-        required_db_features = {"supports_3d_storage"}

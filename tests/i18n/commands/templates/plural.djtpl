@@ -3,6 +3,6 @@
 This file has a literal with plural forms. When processed first, makemessages
 shouldn't create a .po file with duplicate `Plural-Forms` headers
 {% endcomment %}
-{% blocktranslate count number=3 %}{{ number }} Bar{% plural %}{{ number }} Bars{% endblocktranslate %}
+{% blocktrans count number=3 %}{{ number }} Bar{% plural %}{{ number }} Bars{% endblocktrans %}
 
-{% translate 'First `translate`, then `blocktranslate` with a plural' %}
+{% trans 'First `trans`, then `blocktrans` with a plural' %}

@@ -3,6 +3,7 @@ from django.test import SimpleTestCase
 
 
 class FunctionTests(SimpleTestCase):
+
     def test_true(self):
         self.assertIs(divisibleby(4, 2), True)
 

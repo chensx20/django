@@ -5,7 +5,6 @@ To define a one-to-one relationship, use ``OneToOneField()``.
 
 In this example, a ``Place`` optionally can be a ``Restaurant``.
 """
-
 from django.db import models
 
 
@@ -30,6 +29,9 @@ class Bar(models.Model):
     place = models.OneToOneField(Place, models.CASCADE)
     serves_cocktails = models.BooleanField(default=True)
 
+    def __str__(self):
+        return "%s the bar" % self.place.name
+
 
 class UndergroundBar(models.Model):
     place = models.OneToOneField(Place, models.SET_NULL, null=True)
@@ -47,6 +49,9 @@ class Waiter(models.Model):
 class Favorites(models.Model):
     name = models.CharField(max_length=50)
     restaurants = models.ManyToManyField(Restaurant)
+
+    def __str__(self):
+        return "Favorites for %s" % self.name
 
 
 class ManualPrimaryKey(models.Model):
@@ -77,17 +82,15 @@ class Pointer(models.Model):
 
 
 class Pointer2(models.Model):
-    other = models.OneToOneField(Target, models.CASCADE, related_name="second_pointer")
+    other = models.OneToOneField(Target, models.CASCADE, related_name='second_pointer')
 
 
 class HiddenPointer(models.Model):
-    target = models.OneToOneField(Target, models.CASCADE, related_name="hidden+")
+    target = models.OneToOneField(Target, models.CASCADE, related_name='hidden+')
 
 
 class ToFieldPointer(models.Model):
-    target = models.OneToOneField(
-        Target, models.CASCADE, to_field="name", primary_key=True
-    )
+    target = models.OneToOneField(Target, models.CASCADE, to_field='name', primary_key=True)
 
 
 # Test related objects visibility.

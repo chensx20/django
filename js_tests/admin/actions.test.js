@@ -1,21 +1,24 @@
-/* global QUnit, Actions */
-"use strict";
+/* global QUnit */
+/* eslint global-strict: 0, strict: 0 */
+'use strict';
 
-QUnit.module("admin.actions", {
-    beforeEach: function () {
+QUnit.module('admin.actions', {
+    beforeEach: function() {
         // Number of results shown on page
-        window._actions_icnt = "100";
+        /* eslint-disable */
+        window._actions_icnt = '100';
+        /* eslint-enable */
 
-        const $ = django.jQuery;
-        $("#qunit-fixture").append($("#result-table").text());
+        var $ = django.jQuery;
+        $('#qunit-fixture').append($('#result-table').text());
 
-        Actions(document.querySelectorAll("tr input.action-select"));
-    },
+        $('tr input.action-select').actions();
+    }
 });
 
-QUnit.test("check", function (assert) {
-    const $ = django.jQuery;
-    assert.notOk($(".action-select").is(":checked"));
-    $("#action-toggle").click();
-    assert.ok($(".action-select").is(":checked"));
+QUnit.test('check', function(assert) {
+    var $ = django.jQuery;
+    assert.notOk($('.action-select').is(':checked'));
+    $('#action-toggle').click();
+    assert.ok($('.action-select').is(':checked'));
 });

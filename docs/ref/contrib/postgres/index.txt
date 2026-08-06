@@ -30,7 +30,6 @@ a number of PostgreSQL specific data types.
 
     aggregates
     constraints
-    expressions
     fields
     forms
     functions

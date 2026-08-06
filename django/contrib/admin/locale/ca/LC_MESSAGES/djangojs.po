@@ -1,21 +1,18 @@
 # This file is distributed under the same license as the Django package.
 #
 # Translators:
-# Antoni Aloy <aaloy@apsl.net>, 2017,2021
+# Antoni Aloy <aaloy@apsl.net>, 2017
 # Carles Barrobés <carles@barrobes.com>, 2011-2012,2014
-# Carlton Gibson <carlton.gibson@gmail.com>, 2023
-# Emilio Carrion, 2022
-# Isaac Torres, 2026
 # Jannis Leidel <jannis@leidel.info>, 2011
 # Roger Pons <rogerpons@gmail.com>, 2015
 msgid ""
 msgstr ""
 "Project-Id-Version: django\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-03-25 15:04-0500\n"
-"PO-Revision-Date: 2026-06-01 07:59+0000\n"
-"Last-Translator: Isaac Torres, 2026\n"
-"Language-Team: Catalan (http://app.transifex.com/django/django/language/"
+"POT-Creation-Date: 2016-05-17 23:12+0200\n"
+"PO-Revision-Date: 2017-09-19 16:41+0000\n"
+"Last-Translator: Antoni Aloy <aaloy@apsl.net>\n"
+"Language-Team: Catalan (http://www.transifex.com/django/django/language/"
 "ca/)\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -29,10 +26,12 @@ msgstr "%s Disponibles"
 
 #, javascript-format
 msgid ""
-"Choose %s by selecting them and then select the \"Choose\" arrow button."
+"This is the list of available %s. You may choose some by selecting them in "
+"the box below and then clicking the \"Choose\" arrow between the two boxes."
 msgstr ""
-"Escollir %s seleccionat-los i a continuació, seleccioneu el botó de fleta "
-"\"Seleccionar\""
+"Aquesta és la llista de %s disponibles. En podeu escollir alguns "
+"seleccionant-los a la caixa de sota i fent clic a la fletxa \"Escollir\" "
+"entre les dues caixes."
 
 #, javascript-format
 msgid "Type into this box to filter down the list of available %s."
@@ -41,17 +40,18 @@ msgstr "Escriviu en aquesta caixa per a filtrar la llista de %s disponibles."
 msgid "Filter"
 msgstr "Filtre"
 
-#, javascript-format
-msgid "Choose all %s"
-msgstr "Escollir tots %s"
+msgid "Choose all"
+msgstr "Escollir-los tots"
 
 #, javascript-format
-msgid "Choose selected %s"
-msgstr "Escollir seleccionats %s"
+msgid "Click to choose all %s at once."
+msgstr "Feu clic per escollir tots els %s d'un cop."
 
-#, javascript-format
-msgid "Remove selected %s"
-msgstr "Eliminar seleccionats %s"
+msgid "Choose"
+msgstr "Escollir"
+
+msgid "Remove"
+msgstr "Eliminar"
 
 #, javascript-format
 msgid "Chosen %s"
@@ -59,27 +59,19 @@ msgstr "Escollit %s"
 
 #, javascript-format
 msgid ""
-"Remove %s by selecting them and then select the \"Remove\" arrow button."
+"This is the list of chosen %s. You may remove some by selecting them in the "
+"box below and then clicking the \"Remove\" arrow between the two boxes."
 msgstr ""
-"Eliminar %s seleccionat-los i a continuació, seleccioneu el botó de fleta "
-"\"Seleccionar\""
+"Aquesta és la llista de %s escollits. En podeu eliminar alguns seleccionant-"
+"los a la caixa de sota i fent clic a la fletxa \"Eliminar\" entre les dues "
+"caixes."
+
+msgid "Remove all"
+msgstr "Esborrar-los tots"
 
 #, javascript-format
-msgid "Type into this box to filter down the list of selected %s."
-msgstr "Escriviu en aquesta caixa per a filtrar la llista de %s seleccionats."
-
-msgid "(click to clear)"
-msgstr "(fer clic per netejar)"
-
-#, javascript-format
-msgid "Remove all %s"
-msgstr "Eliminar tots %s"
-
-#, javascript-format
-msgid "%s selected option not visible"
-msgid_plural "%s selected options not visible"
-msgstr[0] "%s opcion seleccionada no visible"
-msgstr[1] "%s opcions seleccionades no visibles"
+msgid "Click to remove all chosen %s at once."
+msgstr "Feu clic per eliminar tots els %s escollits d'un cop."
 
 msgid "%(sel)s of %(cnt)s selected"
 msgid_plural "%(sel)s of %(cnt)s selected"
@@ -94,34 +86,21 @@ msgstr ""
 "acció, es perdran aquests canvis no desats."
 
 msgid ""
-"You have selected an action, but you haven’t saved your changes to "
-"individual fields yet. Please click OK to save. You’ll need to re-run the "
+"You have selected an action, but you haven't saved your changes to "
+"individual fields yet. Please click OK to save. You'll need to re-run the "
 "action."
 msgstr ""
-"Has seleccionat una acció, però encara no l'has desat els canvis dels camps "
-"individuals. Si us plau clica OK per desar. Necessitaràs tornar a executar "
-"l'acció."
+"Heu seleccionat una acció, però encara no heu desat els vostres canvis a "
+"camps individuals. Si us plau premeu OK per desar. Haureu de tornar a "
+"executar l'acció."
 
 msgid ""
-"You have selected an action, and you haven’t made any changes on individual "
-"fields. You’re probably looking for the Run button rather than the Save "
+"You have selected an action, and you haven't made any changes on individual "
+"fields. You're probably looking for the Go button rather than the Save "
 "button."
 msgstr ""
-
-msgid "Now"
-msgstr "Ara"
-
-msgid "Midnight"
-msgstr "Mitjanit"
-
-msgid "6 a.m."
-msgstr "6 a.m."
-
-msgid "Noon"
-msgstr "Migdia"
-
-msgid "6 p.m."
-msgstr "6 p.m."
+"Heu seleccionat una acció i no heu fet cap canvi a camps individuals. "
+"Probablement esteu cercant el botó 'Anar' enlloc de 'Desar'."
 
 #, javascript-format
 msgid "Note: You are %s hour ahead of server time."
@@ -135,11 +114,26 @@ msgid_plural "Note: You are %s hours behind server time."
 msgstr[0] "Nota: Aneu %s hora endarrerits respecte la hora del servidor."
 msgstr[1] "Nota: Aneu %s hores endarrerits respecte la hora del servidor."
 
+msgid "Now"
+msgstr "Ara"
+
 msgid "Choose a Time"
 msgstr "Escolliu una hora"
 
 msgid "Choose a time"
 msgstr "Escolliu una hora"
+
+msgid "Midnight"
+msgstr "Mitjanit"
+
+msgid "6 a.m."
+msgstr "6 a.m."
+
+msgid "Noon"
+msgstr "Migdia"
+
+msgid "6 p.m."
+msgstr "6 p.m."
 
 msgid "Cancel"
 msgstr "Cancel·lar"
@@ -192,103 +186,6 @@ msgstr "Novembre"
 msgid "December"
 msgstr "Desembre"
 
-msgctxt "abbrev. month January"
-msgid "Jan"
-msgstr "Gen"
-
-msgctxt "abbrev. month February"
-msgid "Feb"
-msgstr "Feb"
-
-msgctxt "abbrev. month March"
-msgid "Mar"
-msgstr "Mar"
-
-msgctxt "abbrev. month April"
-msgid "Apr"
-msgstr "Abr"
-
-msgctxt "abbrev. month May"
-msgid "May"
-msgstr "Mai"
-
-msgctxt "abbrev. month June"
-msgid "Jun"
-msgstr "Jun"
-
-msgctxt "abbrev. month July"
-msgid "Jul"
-msgstr "Jul"
-
-msgctxt "abbrev. month August"
-msgid "Aug"
-msgstr "Ago"
-
-msgctxt "abbrev. month September"
-msgid "Sep"
-msgstr "Sep"
-
-msgctxt "abbrev. month October"
-msgid "Oct"
-msgstr "Oct"
-
-msgctxt "abbrev. month November"
-msgid "Nov"
-msgstr "Nov"
-
-msgctxt "abbrev. month December"
-msgid "Dec"
-msgstr "Des"
-
-msgid "Sunday"
-msgstr "Diumenge"
-
-msgid "Monday"
-msgstr "Dilluns"
-
-msgid "Tuesday"
-msgstr "Dimarts"
-
-msgid "Wednesday"
-msgstr "Dimecres"
-
-msgid "Thursday"
-msgstr "Dijous"
-
-msgid "Friday"
-msgstr "Divendres"
-
-msgid "Saturday"
-msgstr "Dissabte"
-
-msgctxt "abbrev. day Sunday"
-msgid "Sun"
-msgstr "dg."
-
-msgctxt "abbrev. day Monday"
-msgid "Mon"
-msgstr "dl."
-
-msgctxt "abbrev. day Tuesday"
-msgid "Tue"
-msgstr "dt."
-
-msgctxt "abbrev. day Wednesday"
-msgid "Wed"
-msgstr "dc."
-
-msgctxt "abbrev. day Thursday"
-msgid "Thur"
-msgstr "dj."
-
-msgctxt "abbrev. day Friday"
-msgid "Fri"
-msgstr "dv."
-
-msgctxt "abbrev. day Saturday"
-msgid "Sat"
-msgstr "ds."
-
 msgctxt "one letter Sunday"
 msgid "S"
 msgstr "D"
@@ -316,3 +213,9 @@ msgstr "V"
 msgctxt "one letter Saturday"
 msgid "S"
 msgstr "S"
+
+msgid "Show"
+msgstr "Mostrar"
+
+msgid "Hide"
+msgstr "Ocultar"

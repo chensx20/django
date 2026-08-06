@@ -9,6 +9,7 @@ from .models import NowTestModel, UUIDTestModel
 
 
 class TestTransactionNow(PostgreSQLTestCase):
+
     def test_transaction_now(self):
         """
         The test case puts everything under a transaction, so two models
@@ -29,6 +30,7 @@ class TestTransactionNow(PostgreSQLTestCase):
 
 
 class TestRandomUUID(PostgreSQLTestCase):
+
     def test_random_uuid(self):
         m1 = UUIDTestModel.objects.create()
         m2 = UUIDTestModel.objects.create()

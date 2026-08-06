@@ -1,7 +1,6 @@
 /* Tablets */
 
-input[type="submit"],
-button {
+input[type="submit"], button {
     -webkit-appearance: none;
     appearance: none;
 }
@@ -13,14 +12,13 @@ button {
         -webkit-text-size-adjust: 100%;
     }
 
-    td,
-    th {
+    td, th {
         padding: 10px;
-        font-size: 0.875rem;
+        font-size: 14px;
     }
 
     .small {
-        font-size: 0.75rem;
+        font-size: 12px;
     }
 
     /* Layout */
@@ -30,7 +28,7 @@ button {
     }
 
     #content {
-        padding: 15px 20px 20px;
+        padding: 20px 30px 30px;
     }
 
     div.breadcrumbs {
@@ -45,8 +43,9 @@ button {
         justify-content: flex-start;
     }
 
-    #site-name {
+    #branding h1 {
         margin: 0 0 8px;
+        font-size: 20px;
         line-height: 1.2;
     }
 
@@ -88,82 +87,87 @@ button {
         padding-right: 0;
     }
 
-    td .changelink,
-    td .addlink {
-        font-size: 0.8125rem;
+    td .changelink, td .addlink {
+        font-size: 13px;
     }
 
     /* Changelist */
 
-    #toolbar {
+    #changelist #toolbar {
         border: none;
         padding: 15px;
     }
 
     #changelist-search > div {
+        display: -webkit-flex;
         display: flex;
-        flex-wrap: nowrap;
+        -webkit-flex-wrap: wrap;
+        flex-wrap: wrap;
         max-width: 480px;
     }
 
     #changelist-search label {
-        line-height: 1.375rem;
+        line-height: 22px;
     }
 
-    #toolbar form #searchbar {
+    #changelist #toolbar form #searchbar {
+        -webkit-flex: 1 0 auto;
         flex: 1 0 auto;
         width: 0;
-        height: 1.375rem;
+        height: 22px;
         margin: 0 10px 0 6px;
     }
 
-    #toolbar form input[type="submit"] {
-        flex: 0 1 auto;
-    }
-
     #changelist-search .quiet {
-        width: 0;
-        flex: 1 0 auto;
+        width: 100%;
         margin: 5px 0 0 25px;
     }
 
-    .actions {
+    #changelist .actions {
         display: flex;
         flex-wrap: wrap;
         padding: 15px 0;
     }
 
-    .actions label {
+    #changelist .actions.selected {
+        border: none;
+    }
+
+    #changelist .actions label {
         display: flex;
     }
 
-    .actions select {
-        background: var(--body-bg);
+    #changelist .actions select {
+        background: #fff;
     }
 
-    .actions .button {
+    #changelist .actions .button {
         min-width: 48px;
         margin: 0 10px;
     }
 
-    .actions span.all,
-    .actions span.clear,
-    .actions span.question,
-    .actions span.action-counter {
-        font-size: 0.6875rem;
+    #changelist .actions span.all,
+    #changelist .actions span.clear,
+    #changelist .actions span.question,
+    #changelist .actions span.action-counter {
+        font-size: 11px;
         margin: 0 10px 0 0;
     }
 
     #changelist-filter {
-        flex-basis: 200px;
+        width: 200px;
     }
 
     .change-list .filtered .results,
     .change-list .filtered .paginator,
     .filtered #toolbar,
     .filtered .actions,
+    .filtered div.xfull {
+        margin-right: 230px;
+    }
+
     #changelist .paginator {
-        border-top-color: var(--hairline-color); /* XXX Is this used at all? */
+        border-top-color: #eee;
     }
 
     #changelist .results + .paginator {
@@ -172,34 +176,28 @@ button {
 
     /* Forms */
 
-    legend,
     label {
-        font-size: 1rem;
+        font-size: 14px;
     }
 
-    /*
-    Minifiers remove the default (text) "type" attribute from "input" HTML
-    tags. Add input:not([type]) to make the CSS stylesheet work the same.
-    */
-    .form-row input:not([type]),
-    .form-row input[type="text"],
-    .form-row input[type="password"],
-    .form-row input[type="email"],
-    .form-row input[type="url"],
-    .form-row input[type="tel"],
-    .form-row input[type="number"],
+    .form-row input[type=text],
+    .form-row input[type=password],
+    .form-row input[type=email],
+    .form-row input[type=url],
+    .form-row input[type=tel],
+    .form-row input[type=number],
     .form-row textarea,
     .form-row select,
     .form-row .vTextField {
         box-sizing: border-box;
         margin: 0;
         padding: 6px 8px;
-        min-height: 2.25rem;
-        font-size: 1rem;
+        min-height: 36px;
+        font-size: 14px;
     }
 
     .form-row select {
-        height: 2.25rem;
+        height: 36px;
     }
 
     .form-row select[multiple] {
@@ -207,8 +205,20 @@ button {
         min-height: 0;
     }
 
+    fieldset .fieldBox {
+        float: none;
+        margin: 0 -10px;
+        padding: 0 10px;
+    }
+
+    fieldset .fieldBox + .fieldBox {
+        margin-top: 10px;
+        padding-top: 10px;
+        border-top: 1px solid #eee;
+    }
+
     textarea {
-        max-width: 100%;
+        max-width: 518px;
         max-height: 120px;
     }
 
@@ -216,31 +226,32 @@ button {
         padding-top: 6px;
     }
 
+    .aligned .add-another,
     .aligned .related-lookup,
     .aligned .datetimeshortcuts,
     .aligned .related-lookup + strong {
         align-self: center;
-        margin-left: 0.5rem;
+        margin-left: 15px;
     }
 
-    form .aligned div.radiolist {
+    form .aligned ul.radiolist {
         margin-left: 2px;
     }
 
-    .submit-row {
-        padding: 8px;
+    /* Related widget */
+
+    .related-widget-wrapper {
+        float: none;
     }
 
-    .submit-row a.deletelink {
-        padding: 10px 7px;
+    .related-widget-wrapper-link + .selector {
+        max-width: calc(100% - 30px);
+        margin-right: 15px;
     }
 
-    .button,
-    input[type="submit"],
-    input[type="button"],
-    .submit-row input,
-    a.button {
-        padding: 7px;
+    select + .related-widget-wrapper-link,
+    .related-widget-wrapper-link + .related-widget-wrapper-link {
+        margin-left: 10px;
     }
 
     /* Selector */
@@ -255,14 +266,17 @@ button {
         align-items: center;
     }
 
+    .selector .selector-filter label {
+        margin: 0 8px 0 0;
+    }
+
     .selector .selector-filter input {
-        width: 100%;
+        width: auto;
         min-height: 0;
         flex: 1 1;
     }
 
-    .selector-available,
-    .selector-chosen {
+    .selector-available, .selector-chosen {
         width: auto;
         flex: 1 1;
         display: flex;
@@ -275,8 +289,30 @@ button {
         margin-bottom: 5px;
     }
 
-    .selector-chooseall,
-    .selector-clearall {
+    .selector ul.selector-chooser {
+        width: 26px;
+        height: 52px;
+        padding: 2px 0;
+        margin: auto 15px;
+        border-radius: 20px;
+        transform: translateY(-10px);
+    }
+
+    .selector-add, .selector-remove {
+        width: 20px;
+        height: 20px;
+        background-size: 20px auto;
+    }
+
+    .selector-add {
+        background-position: 0 -120px;
+    }
+
+    .selector-remove {
+        background-position: 0 -80px;
+    }
+
+    a.selector-chooseall, a.selector-clearall {
         align-self: center;
     }
 
@@ -293,24 +329,48 @@ button {
         margin-bottom: 0;
     }
 
-    .stacked .selector-available,
-    .stacked .selector-chosen {
+    .stacked .selector-available, .stacked .selector-chosen {
         width: auto;
     }
 
     .stacked ul.selector-chooser {
+        width: 52px;
+        height: 26px;
         padding: 0 2px;
+        margin: 15px auto;
         transform: none;
-        margin: 10px auto;
     }
 
     .stacked .selector-chooser li {
         padding: 3px;
     }
 
-    .help-tooltip,
-    .selector .help-icon {
+    .stacked .selector-add, .stacked .selector-remove {
+        background-size: 20px auto;
+    }
+
+    .stacked .selector-add {
+        background-position: 0 -40px;
+    }
+
+    .stacked .active.selector-add {
+        background-position: 0 -60px;
+    }
+
+    .stacked .selector-remove {
+        background-position: 0 0;
+    }
+
+    .stacked .active.selector-remove {
+        background-position: 0 -20px;
+    }
+
+    .help-tooltip, .selector .help-icon {
         display: none;
+    }
+
+    form .form-row p.datetime {
+        width: 100%;
     }
 
     .datetime input {
@@ -319,23 +379,20 @@ button {
     }
 
     .datetime span {
-        font-size: 0.8125rem;
+        font-size: 13px;
     }
 
     .datetime .timezonewarning {
         display: block;
-        font-size: 0.6875rem;
-        color: var(--body-quiet-color);
+        font-size: 11px;
+        color: #999;
     }
 
     .datetimeshortcuts {
-        color: var(
-            --border-color
-        ); /* XXX Redundant, .datetime span also sets #ccc */
+        color: #ccc;
     }
 
-    .form-row .datetime input.vDateField,
-    .form-row .datetime input.vTimeField {
+    .form-row .datetime input.vDateField, .form-row .datetime input.vTimeField {
         width: 75%;
     }
 
@@ -346,8 +403,16 @@ button {
     /* Messages */
 
     ul.messagelist li {
-        padding: 10px 10px 10px 55px;
-        background-position-x: 30px;
+        padding-left: 55px;
+        background-position: 30px 12px;
+    }
+
+    ul.messagelist li.error {
+        background-position: 30px 12px;
+    }
+
+    ul.messagelist li.warning {
+        background-position: 30px 14px;
     }
 
     /* Login */
@@ -356,7 +421,7 @@ button {
         padding: 15px 20px;
     }
 
-    .login #site-name {
+    .login #branding h1 {
         margin: 0;
     }
 
@@ -388,9 +453,12 @@ button {
 @media (max-width: 767px) {
     /* Layout */
 
-    #header,
-    #content {
+    #header, #content, #footer {
         padding: 15px;
+    }
+
+    #footer:empty {
+        padding: 0;
     }
 
     div.breadcrumbs {
@@ -399,13 +467,11 @@ button {
 
     /* Dashboard */
 
-    .colMS,
-    .colSM {
+    .colMS, .colSM {
         margin: 0;
     }
 
-    #content-related,
-    .colSM #content-related {
+    #content-related, .colSM #content-related {
         width: 100%;
         margin: 0;
     }
@@ -416,55 +482,74 @@ button {
 
     #content-related .module h2 {
         padding: 10px 15px;
-        font-size: 1rem;
+        font-size: 16px;
     }
 
     /* Changelist */
 
-    #changelist .changelist-form-container {
+    #changelist {
+        display: flex;
         flex-direction: column;
     }
 
-    #changelist .changelist-form-container:has(#changelist-filter) > div {
-        max-width: 100%;
-        width: 100%;
-    }
-
-    #toolbar {
+    #changelist #toolbar {
+        order: 1;
         padding: 10px;
     }
 
-    #changelist-filter {
-        margin-left: 0;
+    #changelist .xfull {
+        order: 2;
     }
 
-    .actions label {
+    #changelist-form {
+        order: 3;
+    }
+
+    #changelist-filter {
+        order: 4;
+    }
+
+    #changelist .actions label {
         flex: 1 1;
     }
 
-    .actions select {
+    #changelist .actions select {
         flex: 1 0;
         width: 100%;
     }
 
-    .actions span {
+    #changelist .actions span {
         flex: 1 0 100%;
     }
 
+    .change-list .filtered .results, .change-list .filtered .paginator,
+    .filtered #toolbar, .filtered .actions, .filtered div.xfull {
+        margin-right: 0;
+    }
+
     #changelist-filter {
-        width: 100%;
+        position: static;
+        width: auto;
         margin-top: 30px;
     }
 
-    /* Forms */
-
-    .titles-and-tools {
-        flex-direction: column;
-    }
-
     .object-tools {
-        margin-bottom: 10px;
+        float: none;
+        margin: 0 0 15px;
+        padding: 0;
+        overflow: hidden;
     }
+
+    .object-tools li {
+        height: auto;
+        margin-left: 0;
+    }
+
+    .object-tools li + li {
+        margin-left: 15px;
+    }
+
+    /* Forms */
 
     .form-row {
         padding: 15px 0;
@@ -472,15 +557,13 @@ button {
 
     .aligned .form-row,
     .aligned .form-row > div {
+        display: flex;
+        flex-wrap: wrap;
         max-width: 100vw;
     }
 
     .aligned .form-row > div {
         width: calc(100vw - 30px);
-    }
-
-    .flex-container {
-        align-items: stretch;
     }
 
     textarea {
@@ -491,11 +574,33 @@ button {
         width: auto;
     }
 
+    fieldset .fieldBox + .fieldBox {
+        margin-top: 15px;
+        padding-top: 15px;
+    }
+
+    fieldset.collapsed .form-row {
+        display: none;
+    }
+
+    .aligned label {
+        width: 100%;
+        padding: 0 0 10px;
+    }
+
+    .aligned label:after {
+        max-height: 0;
+    }
+
     .aligned .form-row input,
     .aligned .form-row select,
     .aligned .form-row textarea {
         flex: 1 1 auto;
         max-width: 100%;
+    }
+
+    .aligned .checkbox-row {
+        align-items: center;
     }
 
     .aligned .checkbox-row input {
@@ -508,8 +613,16 @@ button {
         padding: 1px 0 0 5px;
     }
 
+    .aligned label + p,
+    .aligned label + div.help,
+    .aligned label + div.readonly {
+        padding: 0;
+        margin-left: 0;
+    }
+
     .aligned p.file-upload {
-        font-size: 0.8125rem;
+        margin-left: 0;
+        font-size: 13px;
     }
 
     span.clearable-file-input {
@@ -517,11 +630,32 @@ button {
     }
 
     span.clearable-file-input label {
-        font-size: 0.8125rem;
+        font-size: 13px;
         padding-bottom: 0;
     }
 
-    form .aligned div.radiolist:not(.inline) div + div {
+    .aligned .timezonewarning {
+        flex: 1 0 100%;
+        margin-top: 5px;
+    }
+
+    form .aligned .form-row div.help {
+        width: 100%;
+        margin: 5px 0 0;
+        padding: 0;
+    }
+
+    form .aligned ul {
+        margin-left: 0;
+        padding-left: 0;
+    }
+
+    form .aligned ul.radiolist {
+        margin-right: 15px;
+        margin-bottom: -3px;
+    }
+
+    form .aligned ul.radiolist li + li {
         margin-top: 5px;
     }
 
@@ -535,7 +669,6 @@ button {
 
     .related-widget-wrapper .selector {
         order: 1;
-        flex: 1 0 auto;
     }
 
     .related-widget-wrapper > a {
@@ -550,15 +683,23 @@ button {
         align-self: center;
     }
 
+    select + .related-widget-wrapper-link,
+    .related-widget-wrapper-link + .related-widget-wrapper-link {
+        margin-left: 15px;
+    }
+
     /* Selector */
 
     .selector {
         flex-direction: column;
-        gap: 10px 0;
     }
 
-    .selector-available,
-    .selector-chosen {
+    .selector > * {
+        float: none;
+    }
+
+    .selector-available, .selector-chosen {
+        margin-bottom: 0;
         flex: 1 1 auto;
     }
 
@@ -567,12 +708,13 @@ button {
     }
 
     .selector ul.selector-chooser {
-        display: flex;
-        width: 60px;
-        height: 30px;
+        display: block;
+        float: none;
+        width: 52px;
+        height: 26px;
         padding: 0 2px;
+        margin: 15px auto 20px;
         transform: none;
-        margin: auto;
     }
 
     .selector ul.selector-chooser li {
@@ -583,24 +725,14 @@ button {
         background-position: 0 0;
     }
 
-    :enabled.selector-remove:focus,
-    :enabled.selector-remove:hover {
-        background-position: 0 -24px;
-    }
-
-    .selector-add {
-        background-position: 0 -48px;
-    }
-
-    :enabled.selector-add:focus,
-    :enabled.selector-add:hover {
-        background-position: 0 -72px;
+    .selector-add  {
+        background-position: 0 -40px;
     }
 
     /* Inlines */
 
     .inline-group[data-inline-type="stacked"] .inline-related {
-        border: 1px solid var(--hairline-color);
+        border: 2px solid #eee;
         border-radius: 4px;
         margin-top: 15px;
         overflow: auto;
@@ -610,23 +742,16 @@ button {
         box-sizing: border-box;
     }
 
+    .inline-group[data-inline-type="stacked"] .inline-related + .inline-related {
+        margin-top: 30px;
+    }
+
     .inline-group[data-inline-type="stacked"] .inline-related .module {
         padding: 0 10px;
     }
 
-    .inline-group[data-inline-type="stacked"]
-        .inline-related
-        .module
-        .form-row {
-        border-top: 1px solid var(--hairline-color);
+    .inline-group[data-inline-type="stacked"] .inline-related .module .form-row:last-child {
         border-bottom: none;
-    }
-
-    .inline-group[data-inline-type="stacked"]
-        .inline-related
-        .module
-        .form-row:first-child {
-        border-top: none;
     }
 
     .inline-group[data-inline-type="stacked"] .inline-related h3 {
@@ -648,10 +773,7 @@ button {
         margin-top: 5px;
     }
 
-    .inline-group[data-inline-type="stacked"]
-        .aligned
-        .form-row
-        > div:not([class]) {
+    .inline-group[data-inline-type="stacked"] .aligned .form-row > div:not([class]) {
         width: 100%;
     }
 
@@ -661,7 +783,7 @@ button {
 
     .inline-group[data-inline-type="stacked"] div.add-row {
         margin-top: 15px;
-        border: 1px solid var(--hairline-color);
+        border: 1px solid #eee;
         border-radius: 4px;
     }
 
@@ -680,39 +802,48 @@ button {
     /* Submit row */
 
     .submit-row {
-        padding: 10px;
+        padding: 10px 10px 0;
         margin: 0 0 15px;
+        display: flex;
         flex-direction: column;
-        gap: 8px;
     }
 
-    .submit-row input,
-    .submit-row input.default,
-    .submit-row a {
+    .submit-row > * {
+        width: 100%;
+    }
+
+    .submit-row input, .submit-row input.default, .submit-row a, .submit-row a.closelink {
+        float: none;
+        margin: 0 0 10px;
         text-align: center;
     }
 
     .submit-row a.closelink {
         padding: 10px 0;
-        text-align: center;
     }
 
-    .submit-row a.deletelink {
-        margin: 0;
+    .submit-row p.deletelink-box {
+        order: 4;
     }
 
     /* Messages */
 
     ul.messagelist li {
-        padding: 10px 10px 10px 40px;
-        background-position-x: 15px;
+        padding-left: 40px;
+        background-position: 15px 12px;
+    }
+
+    ul.messagelist li.error {
+        background-position: 15px 12px;
+    }
+
+    ul.messagelist li.warning {
+        background-position: 15px 14px;
     }
 
     /* Paginator */
 
-    .paginator .this-page,
-    .paginator a:link,
-    .paginator a:visited {
+    .paginator .this-page, .paginator a:link, .paginator a:visited {
         padding: 4px 10px;
     }
 
@@ -746,7 +877,9 @@ button {
     }
 
     .login .form-row label {
+        display: block;
         margin: 0 0 5px;
+        padding: 0;
         line-height: 1.2;
     }
 
@@ -754,7 +887,7 @@ button {
         padding: 15px 0 0;
     }
 
-    .login br {
+    .login br, .login .submit-row label {
         display: none;
     }
 
@@ -766,13 +899,12 @@ button {
     .errornote {
         margin: 0 0 20px;
         padding: 8px 12px;
-        font-size: 0.8125rem;
+        font-size: 13px;
     }
 
     /* Calendar and clock */
 
-    .calendarbox,
-    .clockbox {
+    .calendarbox, .clockbox {
         position: fixed !important;
         top: 50% !important;
         left: 50% !important;
@@ -782,8 +914,18 @@ button {
         overflow: visible;
     }
 
-    .calendarbox > *,
-    .clockbox > * {
+    .calendarbox:before, .clockbox:before {
+        content: '';
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        width: 100vw;
+        height: 100vh;
+        background: rgba(0, 0, 0, 0.75);
+        transform: translate(-50%, -50%);
+    }
+
+    .calendarbox > *, .clockbox > * {
         position: relative;
         z-index: 1;
     }
@@ -792,22 +934,20 @@ button {
         z-index: 2;
     }
 
-    .calendarbox .calendar,
-    .clockbox h2 {
+    .calendarbox .calendar, .clockbox h2 {
         border-radius: 4px 4px 0 0;
         overflow: hidden;
     }
 
-    .calendarbox .calendar-cancel,
-    .clockbox .calendar-cancel {
+    .calendarbox .calendar-cancel, .clockbox .calendar-cancel {
         border-radius: 0 0 4px 4px;
         overflow: hidden;
     }
 
     .calendar-shortcuts {
         padding: 10px 0;
-        font-size: 0.75rem;
-        line-height: 0.75rem;
+        font-size: 12px;
+        line-height: 12px;
     }
 
     .calendar-shortcuts a {
@@ -815,7 +955,7 @@ button {
     }
 
     .timelist a {
-        background: var(--body-bg);
+        background: #fff;
         padding: 4px;
     }
 
@@ -831,17 +971,15 @@ button {
         padding: 10px;
     }
 
-    .calendarbox .calendarnav-previous,
-    .calendarbox .calendarnav-next {
+    .calendarbox .calendarnav-previous, .calendarbox .calendarnav-next {
         z-index: 1;
         top: 10px;
     }
 
     /* History */
 
-    table#change-history tbody th,
-    table#change-history tbody td {
-        font-size: 0.8125rem;
+    table#change-history tbody th, table#change-history tbody td {
+        font-size: 13px;
         word-break: break-word;
     }
 
@@ -851,9 +989,8 @@ button {
 
     /* Docs */
 
-    table.model tbody th,
-    table.model tbody td {
-        font-size: 0.8125rem;
+    table.model tbody th, table.model tbody td {
+        font-size: 13px;
         word-break: break-word;
     }
 }
