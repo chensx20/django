@@ -1420,7 +1420,8 @@ class ChangeListTests(TestCase):
         request = self.factory.post(changelist_url, data=data)
         queryset = m._get_list_editable_queryset(request, prefix="form$")
         self.assertEqual(queryset.count(), 1)
-
+        pks = m._get_edited_object_pks(request, prefix="form$")
+        self.assertEqual(pks, [str(a.pk)])
     def test_changelist_view_list_editable_changed_objects_uses_filter(self):
         """
         list_editable edits use a filtered queryset to limit memory usage.
