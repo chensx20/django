@@ -442,6 +442,21 @@ class ModelInheritanceTest(TestCase):
         self.assertEqual(Person.objects.get(pk=congressman.person_ptr_id).name, 'Jane Doe')
         self.assertEqual(Politician.objects.get(pk=congressman.politician_ptr_id).title, 'Senator')
 
+    def test_parent_primary_keys_sync_on_pk_assignment(self):
+        profile = Profile.objects.create(username='john', extra='old')
+        profile.pk = 101
+        self.assertEqual(profile.pk, 101)
+        self.assertEqual(profile.user_ptr_id, 101)
+        self.assertEqual(profile.id, 101)
+
+        congressman = Congressman.objects.create(name='John Doe', title='Representative', state='NC')
+        congressman.pk = 205
+        self.assertEqual(congressman.pk, 205)
+        self.assertEqual(congressman.person_ptr_id, 205)
+        self.assertEqual(congressman.id, 205)
+        self.assertEqual(congressman.politician_ptr_id, 205)
+        self.assertEqual(congressman.politician_id, 205)
+
     def test_inheritance_joins(self):
         # Test for #17502 - check that filtering through two levels of
         # inheritance chain doesn't generate extra joins.
