@@ -565,6 +565,8 @@ class Model(AltersData, metaclass=ModelBase):
                             val = kwargs.pop(field.attname)
                         except KeyError:
                             val = field.get_default()
+                            if field.primary_key:
+                                self._state._pk_default = True
                 else:
                     try:
                         val = kwargs.pop(field.attname)
@@ -574,8 +576,12 @@ class Model(AltersData, metaclass=ModelBase):
                         # get_default() to be evaluated, and then not used.
                         # Refs #12057.
                         val = field.get_default()
+                        if field.primary_key:
+                            self._state._pk_default = True
             else:
                 val = field.get_default()
+                if field.primary_key:
+                    self._state._pk_default = True
 
             if is_related_object:
                 # If we are passed a related instance, set it using the
@@ -1094,7 +1100,9 @@ class Model(AltersData, metaclass=ModelBase):
                 if f.name in update_fields or f.attname in update_fields
             ]
 
-        if not self._is_pk_set(meta):
+        pk_set_before_save = self._is_pk_set(meta)
+        pk_default_set_on_init = getattr(self._state, "_pk_default", False)
+        if not pk_set_before_save:
             pk_val = meta.pk.get_pk_value_on_save(self)
             setattr(self, meta.pk.attname, pk_val)
         pk_set = self._is_pk_set(meta)
@@ -1107,6 +1115,7 @@ class Model(AltersData, metaclass=ModelBase):
             and not force_insert
             and not force_update
             and self._state.adding
+            and pk_default_set_on_init
             and all(f.has_default() or f.has_db_default() for f in meta.pk_fields)
         ):
             force_insert = True

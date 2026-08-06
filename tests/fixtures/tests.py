@@ -696,6 +696,13 @@ class FixtureLoadingTests(DumpDataAssertMixin, TestCase):
         self.assertIn('"pk": "%s"' % m1.id, result)
         self.assertIn('"pk": "%s"' % m2.id, result)
 
+    def test_loaddata_with_explicit_uuid_pk(self):
+        management.call_command('loaddata', 'primary_key_uuid.json', verbosity=0)
+        self.assertEqual(PrimaryKeyUUIDModel.objects.count(), 1)
+
+        management.call_command('loaddata', 'primary_key_uuid.json', verbosity=0)
+        self.assertEqual(PrimaryKeyUUIDModel.objects.count(), 1)
+
     def test_dumpdata_with_file_output(self):
         management.call_command("loaddata", "fixture1.json", verbosity=0)
         self._dumpdata_assert(
