@@ -3,6 +3,7 @@ import unittest
 from django.contrib.admindocs.utils import (
     docutils_is_available, parse_docstring, parse_rst, trim_docstring,
 )
+from django.test.utils import captured_stderr
 
 from .tests import AdminDocsSimpleTestCase
 
@@ -105,6 +106,13 @@ class TestUtils(AdminDocsSimpleTestCase):
         self.assertEqual(parse_rst('`title`', 'template'), markup % 'templates/title/')
         self.assertEqual(parse_rst('`title`', 'filter'), markup % 'filters/#title')
         self.assertEqual(parse_rst('`title`', 'tag'), markup % 'tags/#title')
+
+    def test_parse_rst_with_docstring_no_leading_line_feed(self):
+        title, body, _ = parse_docstring('firstline\n\n    second line')
+        with captured_stderr() as stderr:
+            self.assertEqual(parse_rst(title, ''), '<p>firstline</p>\n')
+            self.assertEqual(parse_rst(body, ''), '<p>second line</p>\n')
+        self.assertEqual(stderr.getvalue(), '')
 
     def test_publish_parts(self):
         """

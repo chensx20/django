@@ -1,5 +1,6 @@
 "Misc. utility functions/classes for admin documentation generator."
 
+from inspect import cleandoc
 import re
 from email.errors import HeaderParseError
 from email.parser import HeaderParser
@@ -32,11 +33,7 @@ def trim_docstring(docstring):
     """
     if not docstring or not docstring.strip():
         return ''
-    # Convert tabs to spaces and split into lines
-    lines = docstring.expandtabs().splitlines()
-    indent = min(len(line) - len(line.lstrip()) for line in lines if line.lstrip())
-    trimmed = [lines[0].lstrip()] + [line[indent:].rstrip() for line in lines[1:]]
-    return "\n".join(trimmed).strip()
+    return cleandoc(docstring)
 
 
 def parse_docstring(docstring):
