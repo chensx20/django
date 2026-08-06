@@ -331,6 +331,9 @@ class GetFieldDisplayTests(SimpleTestCase):
         class Base(models.Model):
             foo = models.CharField(max_length=254, choices=[("A", "Base A")])
 
+            def get_foo_display(self):
+                return "something"
+
             class Meta:
                 abstract = True
 
