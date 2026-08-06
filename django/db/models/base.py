@@ -709,6 +709,8 @@ class Model(AltersData, metaclass=ModelBase):
         for parent_link in self._meta.parents.values():
             if parent_link and parent_link != self._meta.pk:
                 setattr(self, parent_link.target_field.attname, value)
+        if hasattr(self._state, "_pk_default"):
+            self._state._pk_default = False
         return setattr(self, self._meta.pk.attname, value)
 
     pk = property(_get_pk_val, _set_pk_val)
