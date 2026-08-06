@@ -168,6 +168,33 @@ class GetFieldDisplayTests(SimpleTestCase):
         self.assertIsInstance(val, str)
         self.assertEqual(val, 'translated')
 
+    def test_overriding_FIELD_display(self):
+        class FooBar(models.Model):
+            foo_bar = models.IntegerField(choices=[(1, 'foo'), (2, 'bar')])
+
+            def get_foo_bar_display(self):
+                return 'something'
+
+        self.assertEqual(FooBar(foo_bar=1).get_foo_bar_display(), 'something')
+
+    def test_overriding_inherited_FIELD_display(self):
+        class Base(models.Model):
+            foo = models.CharField(max_length=254, choices=[('A', 'Base A')])
+
+            def get_foo_display(self):
+                return 'something'
+
+            class Meta:
+                abstract = True
+
+        class Child(Base):
+            foo = models.CharField(
+                max_length=254, choices=[('A', 'Child A'), ('B', 'Child B')]
+            )
+
+        self.assertEqual(Child(foo='A').get_foo_display(), 'Child A')
+        self.assertEqual(Child(foo='B').get_foo_display(), 'Child B')
+
     def test_iterator_choices(self):
         """
         get_choices() works with Iterators.
