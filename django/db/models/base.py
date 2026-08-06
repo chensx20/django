@@ -549,6 +549,7 @@ class Model(AltersData, metaclass=ModelBase):
 
         for field in fields_iter:
             is_related_object = False
+            set_pk_default = False
             # Virtual field
             if field.column is None or field.generated:
                 continue
@@ -565,6 +566,7 @@ class Model(AltersData, metaclass=ModelBase):
                             val = kwargs.pop(field.attname)
                         except KeyError:
                             val = field.get_default()
+                            set_pk_default = field.primary_key
                 else:
                     try:
                         val = kwargs.pop(field.attname)
@@ -574,8 +576,10 @@ class Model(AltersData, metaclass=ModelBase):
                         # get_default() to be evaluated, and then not used.
                         # Refs #12057.
                         val = field.get_default()
+                        set_pk_default = field.primary_key
             else:
                 val = field.get_default()
+                set_pk_default = field.primary_key
 
             if is_related_object:
                 # If we are passed a related instance, set it using the
@@ -586,7 +590,13 @@ class Model(AltersData, metaclass=ModelBase):
                     _setattr(self, field.name, rel_obj)
             else:
                 if val is not _DEFERRED:
+                    if set_pk_default:
+                        self._state._pk_default_in_init = True
+                    if set_pk_default:
+                        self._state._pk_default = True
                     _setattr(self, field.attname, val)
+                    if set_pk_default:
+                        self._state._pk_default_in_init = False
 
         if kwargs:
             property_names = opts._property_names
@@ -695,6 +705,16 @@ class Model(AltersData, metaclass=ModelBase):
                 state[attr] = memoryview(value)
         self.__dict__.update(state)
 
+    def __setattr__(self, name, value):
+        if (
+            name == self._meta.pk.attname
+            and hasattr(self, "_state")
+            and not getattr(self._state, "_pk_default_in_init", False)
+        ):
+            if hasattr(self._state, "_pk_default"):
+                self._state._pk_default = False
+        return super().__setattr__(name, value)
+
     def _get_pk_val(self, meta=None):
         meta = meta or self._meta
         return getattr(self, meta.pk.attname)
@@ -703,6 +723,8 @@ class Model(AltersData, metaclass=ModelBase):
         for parent_link in self._meta.parents.values():
             if parent_link and parent_link != self._meta.pk:
                 setattr(self, parent_link.target_field.attname, value)
+        if hasattr(self._state, "_pk_default"):
+            self._state._pk_default = False
         return setattr(self, self._meta.pk.attname, value)
 
     pk = property(_get_pk_val, _set_pk_val)
@@ -1094,7 +1116,9 @@ class Model(AltersData, metaclass=ModelBase):
                 if f.name in update_fields or f.attname in update_fields
             ]
 
-        if not self._is_pk_set(meta):
+        pk_set_before_save = self._is_pk_set(meta)
+        pk_default_set_on_init = getattr(self._state, "_pk_default", False)
+        if not pk_set_before_save:
             pk_val = meta.pk.get_pk_value_on_save(self)
             setattr(self, meta.pk.attname, pk_val)
         pk_set = self._is_pk_set(meta)
@@ -1107,6 +1131,7 @@ class Model(AltersData, metaclass=ModelBase):
             and not force_insert
             and not force_update
             and self._state.adding
+            and pk_default_set_on_init
             and all(f.has_default() or f.has_db_default() for f in meta.pk_fields)
         ):
             force_insert = True

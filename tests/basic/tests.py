@@ -190,6 +190,25 @@ class ModelInstanceCreationTests(TestCase):
         with self.assertNumQueries(1):
             PrimaryKeyWithDefault().save()
 
+    def test_save_primary_with_explicit_default_pk(self):
+        obj = PrimaryKeyWithDefault.objects.create()
+        with self.assertNumQueries(1):
+            PrimaryKeyWithDefault(uuid=obj.pk).save()
+
+    def test_save_primary_with_reassigned_default_pk(self):
+        obj = PrimaryKeyWithDefault.objects.create()
+        reassigned = PrimaryKeyWithDefault()
+        reassigned.pk = obj.pk
+        with self.assertNumQueries(1):
+            reassigned.save()
+
+    def test_save_primary_with_reassigned_default_pk_via_field(self):
+        obj = PrimaryKeyWithDefault.objects.create()
+        reassigned = PrimaryKeyWithDefault()
+        reassigned.uuid = obj.pk
+        with self.assertNumQueries(1):
+            reassigned.save()
+
     def test_save_primary_with_default_force_update(self):
         # An UPDATE attempt is made if explicitly requested.
         obj = PrimaryKeyWithDefault.objects.create()
