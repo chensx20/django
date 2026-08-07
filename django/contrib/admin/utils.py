@@ -399,7 +399,7 @@ def display_for_field(value, field, empty_value_display):
         return formats.number_format(value)
     elif isinstance(field, models.FileField) and value:
         return format_html('<a href="{}">{}</a>', value.url, value)
-    elif isinstance(field, models.JSONField) and value:
+    elif isinstance(field, models.JSONField):
         try:
             return json.dumps(value, ensure_ascii=False, cls=field.encoder)
         except TypeError:
