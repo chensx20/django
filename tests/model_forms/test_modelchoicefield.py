@@ -8,14 +8,10 @@ from django.forms.widgets import CheckboxSelectMultiple
 from django.template import Context, Template
 from django.test import TestCase
 
-<<<<<<< HEAD
-from .models import Article, Author, Book, Category, ExplicitPK, Writer
-=======
 from .models import (
-    Article, Author, Book, Category, OptionalRadioSelectModel,
+    Article, Author, Book, Category, ExplicitPK, OptionalRadioSelectModel,
     RequiredRadioSelectModel, Writer,
 )
->>>>>>> 4fc13afe12 (fix(forms): omit blank radio choice)
 
 
 class ModelChoiceFieldTests(TestCase):

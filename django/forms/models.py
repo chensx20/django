@@ -20,7 +20,6 @@ from django.forms.utils import ErrorList
 from django.forms.widgets import (
     HiddenInput,
     MultipleHiddenInput,
-    RadioSelect,
     SelectMultiple,
 )
 from django.utils.choices import BaseChoiceIterator
@@ -1477,33 +1476,10 @@ class ModelChoiceField(ChoiceField):
     }
     iterator = ModelChoiceIterator
 
-<<<<<<< HEAD
-    def __init__(
-        self,
-        queryset,
-        *,
-        empty_label="",
-        required=True,
-        widget=None,
-        label=None,
-        initial=None,
-        help_text="",
-        to_field_name=None,
-        limit_choices_to=None,
-        blank=False,
-        **kwargs,
-    ):
-=======
     def __init__(self, queryset, *, empty_label="---------",
                  required=True, widget=None, label=None, initial=None,
                  help_text='', to_field_name=None, limit_choices_to=None,
                  **kwargs):
-        if required and (initial is not None):
-            self.empty_label = None
-        else:
-            self.empty_label = empty_label
-
->>>>>>> 4fc13afe12 (fix(forms): omit blank radio choice)
         # Call Field instead of ChoiceField __init__() because we don't need
         # ChoiceField.__init__().
         Field.__init__(
@@ -1515,9 +1491,7 @@ class ModelChoiceField(ChoiceField):
             help_text=help_text,
             **kwargs,
         )
-        if (required and initial is not None) or (
-            isinstance(self.widget, RadioSelect) and not blank
-        ):
+        if required and initial is not None:
             self.empty_label = None
         else:
             if empty_label == "":
