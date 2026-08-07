@@ -407,6 +407,13 @@ class BaseDatabaseSchemaEditor:
             model, columns, exclude=meta_constraint_names | meta_index_names,
             **constraint_kwargs
         )
+        if constraint_kwargs == {'index': True}:
+            with self.connection.cursor() as cursor:
+                constraints = self.connection.introspection.get_constraints(cursor, model._meta.db_table)
+            constraint_names = [
+                name for name in constraint_names
+                if constraints[name]['index'] and not constraints[name]['unique']
+            ]
         if len(constraint_names) != 1:
             raise ValueError("Found wrong number (%s) of constraints for %s(%s)" % (
                 len(constraint_names),

@@ -2245,6 +2245,39 @@ class SchemaTests(TransactionTestCase):
             AuthorWithIndexedNameAndBirthday._meta.indexes = []
             editor.remove_index(AuthorWithIndexedNameAndBirthday, index)
 
+    @skipUnlessDBFeature('allows_multiple_constraints_on_same_fields')
+    def test_remove_index_together_overlapping_unique_together(self):
+        class SharedIndexUnique(Model):
+            slug = CharField(max_length=255)
+            title = CharField(max_length=255)
+
+            class Meta:
+                app_label = 'schema'
+                unique_together = [['slug', 'title']]
+                index_together = [['slug', 'title']]
+
+        with connection.schema_editor() as editor:
+            editor.create_model(SharedIndexUnique)
+
+        constraints = self.get_constraints(SharedIndexUnique._meta.db_table)
+        matching = [
+            details for details in constraints.values()
+            if details['columns'] == ['slug', 'title']
+        ]
+        self.assertEqual(len([c for c in matching if c['unique']]), 1)
+        self.assertEqual(len([c for c in matching if c['index'] and not c['unique']]), 1)
+
+        with connection.schema_editor() as editor:
+            editor.alter_index_together(SharedIndexUnique, [('slug', 'title')], [])
+
+        constraints = self.get_constraints(SharedIndexUnique._meta.db_table)
+        matching = [
+            details for details in constraints.values()
+            if details['columns'] == ['slug', 'title']
+        ]
+        self.assertEqual(len([c for c in matching if c['unique']]), 1)
+        self.assertEqual(len([c for c in matching if c['index'] and not c['unique']]), 0)
+
     @isolate_apps('schema')
     def test_db_table(self):
         """
