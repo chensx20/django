@@ -203,14 +203,23 @@ class UtilsTests(SimpleTestCase):
             (['a', 'b'], '["a", "b"]'),
             ('a', '"a"'),
             ({'a': '你好 世界'}, '{"a": "你好 世界"}'),
-            ({'a': {}}, '{"a": {}}'),
-            ({'a': []}, '{"a": []}'),
-            ({'a': ''}, '{"a": ""}'),
-            ({'a': 0}, '{"a": 0}'),
-            ({'a': False}, '{"a": false}'),
             ({('a', 'b'): 'c'}, "{('a', 'b'): 'c'}"),
         ]
         for value, display_value in tests:
+            with self.subTest(value=value):
+                self.assertEqual(
+                    display_for_field(value, models.JSONField(), self.empty_value),
+                    display_value,
+                )
+
+        falsey_tests = [
+            ({}, '{}'),
+            ([], '[]'),
+            ('', '""'),
+            (0, '0'),
+            (False, 'false'),
+        ]
+        for value, display_value in falsey_tests:
             with self.subTest(value=value):
                 self.assertEqual(
                     display_for_field(value, models.JSONField(), self.empty_value),
