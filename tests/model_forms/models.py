@@ -247,6 +247,14 @@ class Price(models.Model):
         return "%s for %s" % (self.quantity, self.price)
 
 
+class RequiredRadioSelectModel(models.Model):
+    category = models.ForeignKey(Category, models.CASCADE, blank=False)
+
+
+class OptionalRadioSelectModel(models.Model):
+    category = models.ForeignKey(Category, models.CASCADE, blank=True, null=True)
+
+
 class Triple(models.Model):
     left = models.IntegerField()
     middle = models.IntegerField()

@@ -8,7 +8,16 @@ from django.forms.widgets import CheckboxSelectMultiple
 from django.template import Context, Template
 from django.test import TestCase
 
-from .models import Article, Author, Book, Category, ExplicitPK, Writer
+from .models import (
+    Article,
+    Author,
+    Book,
+    Category,
+    ExplicitPK,
+    OptionalRadioSelectModel,
+    RequiredRadioSelectModel,
+    Writer,
+)
 
 
 class ModelChoiceFieldTests(TestCase):
@@ -174,27 +183,6 @@ class ModelChoiceFieldTests(TestCase):
         Category.objects.all().delete()
         self.assertIs(bool(f.choices), True)
 
-    def test_choices_radio_blank(self):
-        blank_choice = [("", get_blank_choice_label())]
-        choices = [
-            (self.c1.pk, "Entertainment"),
-            (self.c2.pk, "A test"),
-            (self.c3.pk, "Third"),
-        ]
-        categories = Category.objects.order_by("pk")
-        for widget in [forms.RadioSelect, forms.RadioSelect()]:
-            for blank in [True, False]:
-                with self.subTest(widget=widget, blank=blank):
-                    f = forms.ModelChoiceField(
-                        categories,
-                        widget=widget,
-                        blank=blank,
-                    )
-                    self.assertEqual(
-                        list(f.choices),
-                        (blank_choice + choices if blank else choices),
-                    )
-
     def test_deepcopies_widget(self):
         class ModelChoiceForm(forms.Form):
             category = forms.ModelChoiceField(Category.objects.all())
@@ -229,6 +217,36 @@ class ModelChoiceFieldTests(TestCase):
 
         form = ModelChoiceForm()
         self.assertCountEqual(form.fields["category"].queryset, [self.c2, self.c3])
+
+    def test_required_model_form_foreign_key_radio_select(self):
+        class ModelChoiceForm(forms.ModelForm):
+            class Meta:
+                model = RequiredRadioSelectModel
+                fields = ["category"]
+                widgets = {"category": forms.RadioSelect}
+
+        form = ModelChoiceForm()
+        self.assertIs(form.fields["category"].required, True)
+        self.assertEqual(
+            [str(widget.data["value"]) for widget in form["category"].subwidgets],
+            [str(self.c1.pk), str(self.c2.pk), str(self.c3.pk)],
+        )
+        self.assertNotIn('value=""', str(form["category"]))
+
+    def test_optional_model_form_foreign_key_radio_select(self):
+        class ModelChoiceForm(forms.ModelForm):
+            class Meta:
+                model = OptionalRadioSelectModel
+                fields = ["category"]
+                widgets = {"category": forms.RadioSelect}
+
+        form = ModelChoiceForm()
+        self.assertIs(form.fields["category"].required, False)
+        self.assertEqual(
+            [str(widget.data["value"]) for widget in form["category"].subwidgets],
+            ["", str(self.c1.pk), str(self.c2.pk), str(self.c3.pk)],
+        )
+        self.assertIn('value=""', str(form["category"]))
 
     def test_no_extra_query_when_accessing_attrs(self):
         """
