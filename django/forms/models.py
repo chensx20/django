@@ -20,6 +20,7 @@ from django.forms.utils import ErrorList
 from django.forms.widgets import (
     HiddenInput,
     MultipleHiddenInput,
+    RadioSelect,
     SelectMultiple,
 )
 from django.utils.choices import BaseChoiceIterator
@@ -137,6 +138,15 @@ def apply_limit_choices_to_to_formfield(formfield):
             )
 
 
+def apply_empty_label_to_formfield(formfield, model_field):
+    if (
+        isinstance(formfield, ModelChoiceField)
+        and isinstance(formfield.widget, RadioSelect)
+        and not model_field.blank
+    ):
+        formfield.empty_label = None
+
+
 def fields_for_model(
     model,
     fields=None,
@@ -244,6 +254,7 @@ def fields_for_model(
         if formfield:
             if apply_limit_choices_to:
                 apply_limit_choices_to_to_formfield(formfield)
+            apply_empty_label_to_formfield(formfield, f)
             field_dict[f.name] = formfield
         else:
             ignored.append(f.name)
@@ -1476,10 +1487,9 @@ class ModelChoiceField(ChoiceField):
     }
     iterator = ModelChoiceIterator
 
-    def __init__(self, queryset, *, empty_label="---------",
-                 required=True, widget=None, label=None, initial=None,
-                 help_text='', to_field_name=None, limit_choices_to=None,
-                 **kwargs):
+    def __init__(self, queryset, *, empty_label="", required=True,
+                 widget=None, label=None, initial=None, help_text="",
+                 to_field_name=None, limit_choices_to=None, **kwargs):
         # Call Field instead of ChoiceField __init__() because we don't need
         # ChoiceField.__init__().
         Field.__init__(
