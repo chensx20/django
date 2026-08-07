@@ -9,8 +9,14 @@ from django.template import Context, Template
 from django.test import TestCase
 
 from .models import (
-    Article, Author, Book, Category, ExplicitPK, OptionalRadioSelectModel,
-    RequiredRadioSelectModel, Writer,
+    Article,
+    Author,
+    Book,
+    Category,
+    ExplicitPK,
+    OptionalRadioSelectModel,
+    RequiredRadioSelectModel,
+    Writer,
 )
 
 
@@ -216,31 +222,31 @@ class ModelChoiceFieldTests(TestCase):
         class ModelChoiceForm(forms.ModelForm):
             class Meta:
                 model = RequiredRadioSelectModel
-                fields = ['category']
-                widgets = {'category': forms.RadioSelect}
+                fields = ["category"]
+                widgets = {"category": forms.RadioSelect}
 
         form = ModelChoiceForm()
-        self.assertIs(form.fields['category'].required, True)
+        self.assertIs(form.fields["category"].required, True)
         self.assertEqual(
-            [str(widget.data['value']) for widget in form['category'].subwidgets],
+            [str(widget.data["value"]) for widget in form["category"].subwidgets],
             [str(self.c1.pk), str(self.c2.pk), str(self.c3.pk)],
         )
-        self.assertNotIn('value=""', str(form['category']))
+        self.assertNotIn('value=""', str(form["category"]))
 
     def test_optional_model_form_foreign_key_radio_select(self):
         class ModelChoiceForm(forms.ModelForm):
             class Meta:
                 model = OptionalRadioSelectModel
-                fields = ['category']
-                widgets = {'category': forms.RadioSelect}
+                fields = ["category"]
+                widgets = {"category": forms.RadioSelect}
 
         form = ModelChoiceForm()
-        self.assertIs(form.fields['category'].required, False)
+        self.assertIs(form.fields["category"].required, False)
         self.assertEqual(
-            [str(widget.data['value']) for widget in form['category'].subwidgets],
-            ['', str(self.c1.pk), str(self.c2.pk), str(self.c3.pk)],
+            [str(widget.data["value"]) for widget in form["category"].subwidgets],
+            ["", str(self.c1.pk), str(self.c2.pk), str(self.c3.pk)],
         )
-        self.assertIn('value=""', str(form['category']))
+        self.assertIn('value=""', str(form["category"]))
 
     def test_no_extra_query_when_accessing_attrs(self):
         """
