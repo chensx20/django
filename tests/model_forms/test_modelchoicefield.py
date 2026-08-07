@@ -246,13 +246,11 @@ class ModelChoiceFieldTests(TestCase):
 
         form = ModelChoiceForm()
         self.assertIs(form.fields['category'].required, True)
-        self.assertEqual([
-            (str(value), label) for value, label in form.fields['category'].choices
-        ], [
-            (str(self.c1.pk), 'Entertainment'),
-            (str(self.c2.pk), 'A test'),
-            (str(self.c3.pk), 'Third'),
-        ])
+        self.assertEqual(
+            [str(widget.data['value']) for widget in form['category'].subwidgets],
+            [str(self.c1.pk), str(self.c2.pk), str(self.c3.pk)],
+        )
+        self.assertNotIn('value=""', str(form['category']))
 
     def test_optional_model_form_foreign_key_radio_select(self):
         class ModelChoiceForm(forms.ModelForm):
@@ -263,13 +261,11 @@ class ModelChoiceFieldTests(TestCase):
 
         form = ModelChoiceForm()
         self.assertIs(form.fields['category'].required, False)
-        self.assertEqual([
-            (str(value), label) for value, label in form.fields['category'].choices
-        ], [
+        self.assertEqual(list(form.fields['category'].choices), [
             ('', '---------'),
-            (str(self.c1.pk), 'Entertainment'),
-            (str(self.c2.pk), 'A test'),
-            (str(self.c3.pk), 'Third'),
+            (self.c1.pk, 'Entertainment'),
+            (self.c2.pk, 'A test'),
+            (self.c3.pk, 'Third'),
         ])
 
     def test_no_extra_query_when_accessing_attrs(self):

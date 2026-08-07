@@ -1287,6 +1287,7 @@ class ForeignKey(ForeignObject):
 
     def formfield(self, *, using=None, **kwargs):
         if isinstance(self.remote_field.model, str):
+<<<<<<< HEAD
             raise ValueError(
                 "Cannot create form field for %r yet, because "
                 "its related model %r has not been loaded yet"
@@ -1301,6 +1302,19 @@ class ForeignKey(ForeignObject):
                 "blank": self.blank,
             }
         )
+=======
+            raise ValueError("Cannot create form field for %r yet, because "
+                             "its related model %r has not been loaded yet" %
+                             (self.name, self.remote_field.model))
+        if kwargs.get('widget') is forms.RadioSelect and self.blank is False:
+            kwargs['empty_label'] = None
+        return super().formfield(**{
+            'form_class': forms.ModelChoiceField,
+            'queryset': self.remote_field.model._default_manager.using(using),
+            'to_field_name': self.remote_field.field_name,
+            **kwargs,
+        })
+>>>>>>> a3c8bf13c0 (fix(forms): scope radio blank choice)
 
     def db_check(self, connection):
         return None
