@@ -8,7 +8,14 @@ from django.forms.widgets import CheckboxSelectMultiple
 from django.template import Context, Template
 from django.test import TestCase
 
+<<<<<<< HEAD
 from .models import Article, Author, Book, Category, ExplicitPK, Writer
+=======
+from .models import (
+    Article, Author, Book, Category, OptionalRadioSelectModel,
+    RequiredRadioSelectModel, Writer,
+)
+>>>>>>> 4fc13afe12 (fix(forms): omit blank radio choice)
 
 
 class ModelChoiceFieldTests(TestCase):
@@ -229,6 +236,41 @@ class ModelChoiceFieldTests(TestCase):
 
         form = ModelChoiceForm()
         self.assertCountEqual(form.fields["category"].queryset, [self.c2, self.c3])
+
+    def test_required_model_form_foreign_key_radio_select(self):
+        class ModelChoiceForm(forms.ModelForm):
+            class Meta:
+                model = RequiredRadioSelectModel
+                fields = ['category']
+                widgets = {'category': forms.RadioSelect}
+
+        form = ModelChoiceForm()
+        self.assertIs(form.fields['category'].required, True)
+        self.assertEqual([
+            (str(value), label) for value, label in form.fields['category'].choices
+        ], [
+            (str(self.c1.pk), 'Entertainment'),
+            (str(self.c2.pk), 'A test'),
+            (str(self.c3.pk), 'Third'),
+        ])
+
+    def test_optional_model_form_foreign_key_radio_select(self):
+        class ModelChoiceForm(forms.ModelForm):
+            class Meta:
+                model = OptionalRadioSelectModel
+                fields = ['category']
+                widgets = {'category': forms.RadioSelect}
+
+        form = ModelChoiceForm()
+        self.assertIs(form.fields['category'].required, False)
+        self.assertEqual([
+            (str(value), label) for value, label in form.fields['category'].choices
+        ], [
+            ('', '---------'),
+            (str(self.c1.pk), 'Entertainment'),
+            (str(self.c2.pk), 'A test'),
+            (str(self.c3.pk), 'Third'),
+        ])
 
     def test_no_extra_query_when_accessing_attrs(self):
         """
