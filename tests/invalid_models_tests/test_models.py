@@ -3,7 +3,6 @@ import unittest
 from django.conf import settings
 from django.core.checks import Error, Warning
 from django.core.checks.model_checks import _check_lazy_references
-from django.core.exceptions import ImproperlyConfigured
 from django.db import connection, connections, models
 from django.db.models.functions import Lower
 from django.db.models.signals import post_init
@@ -1006,14 +1005,66 @@ class OtherModelTests(SimpleTestCase):
 
         self.assertEqual(ShippingMethod.check(), [])
 
+    @isolate_apps('invalid_models_tests')
     def test_missing_parent_link(self):
-        msg = 'Add parent_link=True to invalid_models_tests.ParkingLot.parent.'
-        with self.assertRaisesMessage(ImproperlyConfigured, msg):
-            class Place(models.Model):
-                pass
+        class Place(models.Model):
+            pass
 
-            class ParkingLot(Place):
-                parent = models.OneToOneField(Place, models.CASCADE)
+        class ParkingLot(Place):
+            parent = models.OneToOneField(Place, models.CASCADE)
+
+        place_ptr = ParkingLot._meta.get_field('place_ptr')
+        parent = ParkingLot._meta.get_field('parent')
+        self.assertEqual(ParkingLot.check(), [
+            Error(
+                (
+                    "Reverse accessor for 'ParkingLot.place_ptr' clashes with "
+                    "reverse accessor for 'ParkingLot.parent'."
+                ),
+                hint=(
+                    "Add or change a related_name argument to the definition "
+                    "for 'ParkingLot.place_ptr' or 'ParkingLot.parent'."
+                ),
+                obj=place_ptr,
+                id='fields.E304',
+            ),
+            Error(
+                (
+                    "Reverse query name for 'ParkingLot.place_ptr' clashes with "
+                    "reverse query name for 'ParkingLot.parent'."
+                ),
+                hint=(
+                    "Add or change a related_name argument to the definition "
+                    "for 'ParkingLot.place_ptr' or 'ParkingLot.parent'."
+                ),
+                obj=place_ptr,
+                id='fields.E305',
+            ),
+            Error(
+                (
+                    "Reverse accessor for 'ParkingLot.parent' clashes with "
+                    "reverse accessor for 'ParkingLot.place_ptr'."
+                ),
+                hint=(
+                    "Add or change a related_name argument to the definition "
+                    "for 'ParkingLot.parent' or 'ParkingLot.place_ptr'."
+                ),
+                obj=parent,
+                id='fields.E304',
+            ),
+            Error(
+                (
+                    "Reverse query name for 'ParkingLot.parent' clashes with "
+                    "reverse query name for 'ParkingLot.place_ptr'."
+                ),
+                hint=(
+                    "Add or change a related_name argument to the definition "
+                    "for 'ParkingLot.parent' or 'ParkingLot.place_ptr'."
+                ),
+                obj=parent,
+                id='fields.E305',
+            ),
+        ])
 
     def test_m2m_table_name_clash(self):
         class Foo(models.Model):
