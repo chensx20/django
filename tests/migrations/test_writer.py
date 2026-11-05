@@ -13,6 +13,7 @@ import custom_migration_operations.operations
 
 from django import get_version
 from django.conf import SettingsReference, settings
+from django.core.exceptions import ValidationError
 from django.core.validators import EmailValidator, RegexValidator
 from django.db import migrations, models
 from django.db.migrations.serializer import BaseSerializer
@@ -49,6 +50,30 @@ class TranslatedEnum(enum.Enum):
 
 class ObjectEnum(enum.Enum):
     A = object()
+
+
+class SimpleFlag(enum.Flag):
+    A = 1
+    B = 2
+
+
+class NamedFlag(enum.Flag):
+    NONE = 0
+    A = 1
+    B = 2
+    BOTH = 3
+
+
+class SimpleIntFlag(enum.IntFlag):
+    A = 1
+    B = 2
+
+
+class NamedIntFlag(enum.IntFlag):
+    NONE = 0
+    A = 1
+    B = 2
+    BOTH = 3
 
 
 class Money(decimal.Decimal):
@@ -364,6 +389,52 @@ class WriterTests(SimpleTestCase):
                     self.assertEqual(MigrationWriter.serialize(field), (string, imports))
                 self.assertEqual(imports, {'from django.db import models', 'import migrations.test_writer'})
 
+    def test_serialize_regex_flags(self):
+        for flag, expression in (
+            (re.S, 're.RegexFlag(16)'),
+            (re.I | re.M, 're.RegexFlag(10)'),
+            (re.RegexFlag(0), 're.RegexFlag(0)'),
+        ):
+            with self.subTest(flag=flag):
+                self.assertSerializedResultEqual(flag, (expression, {'import re'}))
+                replayed = self.serialize_round_trip(flag)
+                self.assertIs(type(replayed), re.RegexFlag)
+                self.assertEqual(replayed.value, flag.value)
+
+    def test_serialize_flags(self):
+        for flag_class in (SimpleFlag, NamedFlag, SimpleIntFlag, NamedIntFlag):
+            flags = [flag_class.A, flag_class(0), flag_class.A | flag_class.B]
+            if flag_class in (SimpleIntFlag, NamedIntFlag):
+                flags.extend([flag_class(8), flag_class.A | flag_class(8)])
+            for flag in flags:
+                with self.subTest(flag_class=flag_class, value=flag.value):
+                    self.assertSerializedResultEqual(flag, (
+                        'migrations.test_writer.%s(%d)' % (flag_class.__name__, flag.value),
+                        {'import migrations.test_writer'},
+                    ))
+                    replayed = self.serialize_round_trip(flag)
+                    self.assertIs(type(replayed), flag_class)
+                    self.assertEqual(replayed.value, flag.value)
+
+    def test_serialize_regex_validator_flags(self):
+        for flags, expression, accepted, rejected in (
+            (re.I | re.M, 're.RegexFlag(10)', 'before\nABC\nafter', 'before\nABD\nafter'),
+            (re.RegexFlag(0), 're.RegexFlag(0)', 'abc', 'before\nabc\nafter'),
+        ):
+            with self.subTest(flags=flags):
+                validator = RegexValidator('^abc$', flags=flags)
+                self.assertSerializedResultEqual(validator, (
+                    "django.core.validators.RegexValidator('^abc$', flags=%s)" % expression,
+                    {'import django.core.validators', 'import re'},
+                ))
+                replayed = self.serialize_round_trip(validator)
+                self.assertIs(type(replayed.flags), re.RegexFlag)
+                self.assertEqual(replayed.flags.value, flags.value)
+                for candidate in (validator, replayed):
+                    self.assertIsNone(candidate(accepted))
+                    with self.assertRaisesMessage(ValidationError, 'Enter a valid value.'):
+                        candidate(rejected)
+
     def test_serialize_choices(self):
         class TextChoices(models.TextChoices):
             A = 'A', 'A value'
@@ -512,7 +583,7 @@ class WriterTests(SimpleTestCase):
         # Test a string regex with flag
         validator = RegexValidator(r'^[0-9]+$', flags=re.S)
         string = MigrationWriter.serialize(validator)[0]
-        self.assertEqual(string, "django.core.validators.RegexValidator('^[0-9]+$', flags=re.RegexFlag['DOTALL'])")
+        self.assertEqual(string, "django.core.validators.RegexValidator('^[0-9]+$', flags=re.RegexFlag(16))")
         self.serialize_round_trip(validator)
 
         # Test message and code

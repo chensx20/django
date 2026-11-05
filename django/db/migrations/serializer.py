@@ -120,6 +120,8 @@ class EnumSerializer(BaseSerializer):
     def serialize(self):
         enum_class = self.value.__class__
         module = enum_class.__module__
+        if isinstance(self.value, enum.Flag):
+            return '%s.%s(%r)' % (module, enum_class.__name__, self.value.value), {'import %s' % module}
         return '%s.%s[%r]' % (module, enum_class.__name__, self.value.name), {'import %s' % module}
 
 
