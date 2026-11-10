@@ -2,12 +2,14 @@ import collections.abc
 from datetime import datetime
 from math import ceil
 from operator import attrgetter
+from unittest import mock
 
-from django.core.exceptions import FieldError
-from django.db import connection
+from django.core.exceptions import FieldDoesNotExist, FieldError
+from django.db import connection, models
 from django.db.models import Exists, Max, OuterRef
 from django.db.models.functions import Substr
 from django.test import TestCase, skipUnlessDBFeature
+from django.test.utils import isolate_apps
 from django.utils.deprecation import RemovedInDjango40Warning
 
 from .models import (
@@ -193,6 +195,108 @@ class LookupTests(TestCase):
         msg = "in_bulk()'s field_name must be a unique field but 'author' isn't."
         with self.assertRaisesMessage(ValueError, msg):
             Article.objects.in_bulk([self.au1], field_name='author')
+
+    def test_in_bulk_unique_constraint(self):
+        self.assertIs(Season._meta.get_field('year').unique, False)
+        season_2010 = Season.objects.create(year=2010)
+        Season.objects.create(year=2011)
+        season_2012 = Season.objects.create(year=2012)
+        self.assertEqual(
+            Season.objects.in_bulk([2010, 2012, 2013], field_name='year'),
+            {2010: season_2010, 2012: season_2012},
+        )
+
+    def test_in_bulk_unique_constraint_without_ids(self):
+        season_2010 = Season.objects.create(year=2010)
+        season_2011 = Season.objects.create(year=2011)
+        self.assertEqual(
+            Season.objects.in_bulk(field_name='year'),
+            {2010: season_2010, 2011: season_2011},
+        )
+
+    def test_in_bulk_unique_constraint_empty_ids(self):
+        with self.assertNumQueries(0):
+            self.assertEqual(Season.objects.in_bulk([], field_name='year'), {})
+
+    def test_in_bulk_unique_constraint_filtered(self):
+        season_2010 = Season.objects.create(year=2010)
+        Season.objects.create(year=2011)
+        seasons = Season.objects.filter(year=2010).order_by('-year')
+        self.assertEqual(
+            seasons.in_bulk([2010, 2011], field_name='year'),
+            {2010: season_2010},
+        )
+
+    def test_in_bulk_unique_constraint_lots_of_ids(self):
+        seasons = {
+            year: Season.objects.create(year=year)
+            for year in (2010, 2011, 2012)
+        }
+        with mock.patch.object(connection.features, 'max_query_params', 2):
+            with self.assertNumQueries(2):
+                self.assertEqual(Season.objects.in_bulk(seasons, field_name='year'), seasons)
+
+    @isolate_apps('lookup')
+    def test_in_bulk_conditional_unique_constraint(self):
+        class ConditionalUnique(models.Model):
+            name = models.CharField(max_length=100)
+
+            class Meta:
+                constraints = [
+                    models.UniqueConstraint(
+                        fields=['name'], name='conditional_unique_name',
+                        condition=models.Q(name__startswith='A'),
+                    ),
+                ]
+
+        msg = "in_bulk()'s field_name must be a unique field but 'name' isn't."
+        for id_list in (None, [], ['A']):
+            with self.subTest(id_list=id_list), self.assertNumQueries(0):
+                with self.assertRaisesMessage(ValueError, msg):
+                    ConditionalUnique.objects.in_bulk(id_list, field_name='name')
+
+    @isolate_apps('lookup')
+    def test_in_bulk_composite_unique_constraint(self):
+        class CompositeUnique(models.Model):
+            name = models.CharField(max_length=100)
+            year = models.IntegerField()
+
+            class Meta:
+                constraints = [
+                    models.UniqueConstraint(fields=['name', 'year'], name='composite_unique_name_year'),
+                ]
+
+        for field_name in ('name', 'year'):
+            msg = "in_bulk()'s field_name must be a unique field but %r isn't." % field_name
+            for id_list in (None, [], [1]):
+                with self.subTest(field_name=field_name, id_list=id_list), self.assertNumQueries(0):
+                    with self.assertRaisesMessage(ValueError, msg):
+                        CompositeUnique.objects.in_bulk(id_list, field_name=field_name)
+
+    @isolate_apps('lookup')
+    def test_in_bulk_unique_together(self):
+        class UniqueTogether(models.Model):
+            name = models.CharField(max_length=100)
+
+            class Meta:
+                unique_together = [('name',)]
+
+        msg = "in_bulk()'s field_name must be a unique field but 'name' isn't."
+        for id_list in (None, [], ['A']):
+            with self.subTest(id_list=id_list), self.assertNumQueries(0):
+                with self.assertRaisesMessage(ValueError, msg):
+                    UniqueTogether.objects.in_bulk(id_list, field_name='name')
+
+    def test_in_bulk_invalid_field(self):
+        for id_list in (None, [], [2010]):
+            with self.subTest(id_list=id_list):
+                with self.assertRaisesMessage(FieldDoesNotExist, "Season has no field named 'missing'"):
+                    Season.objects.in_bulk(id_list, field_name='missing')
+
+    def test_in_bulk_sliced_queryset(self):
+        msg = "Cannot use 'limit' or 'offset' with in_bulk"
+        with self.assertRaisesMessage(AssertionError, msg):
+            Season.objects.all()[:1].in_bulk([], field_name='year')
 
     def test_values(self):
         # values() returns a list of dictionaries instead of object instances --
