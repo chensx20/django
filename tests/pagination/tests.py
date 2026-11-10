@@ -1,13 +1,14 @@
 import warnings
 from datetime import datetime
+from unittest import mock
 
 from django.core.paginator import (
-    EmptyPage, InvalidPage, PageNotAnInteger, Paginator,
+    EmptyPage, InvalidPage, Page, PageNotAnInteger, Paginator,
     UnorderedObjectListWarning,
 )
 from django.test import SimpleTestCase, TestCase
 
-from .custom import ValidAdjacentNumsPaginator
+from .custom import ValidAdjacentNumsPage, ValidAdjacentNumsPaginator
 from .models import Article
 
 
@@ -265,6 +266,143 @@ class PaginationTests(SimpleTestCase):
         """
         self.assertIsInstance(Paginator([1, 2, 3], 2).page_range, type(range(0)))
 
+    def test_paginator_iteration(self):
+        paginator = Paginator([1, 2, 3], 2)
+        pages = iter(paginator)
+        for number, objects in ((1, [1, 2]), (2, [3])):
+            with self.subTest(number=number):
+                page = next(pages)
+                self.assertIsInstance(page, Page)
+                self.assertEqual(page.number, number)
+                self.assertEqual(list(page), objects)
+                self.assertIs(page.paginator, paginator)
+        with self.assertRaises(StopIteration):
+            next(pages)
+        self.assertEqual(
+            [(page.number, list(page)) for page in paginator],
+            [(1, [1, 2]), (2, [3])],
+        )
+
+    def test_paginator_iteration_empty(self):
+        paginator = Paginator([], 2)
+        pages = iter(paginator)
+        page = next(pages)
+        self.assertIsInstance(page, Page)
+        self.assertEqual(page.number, 1)
+        self.assertEqual(list(page), [])
+        self.assertIs(page.paginator, paginator)
+        with self.assertRaises(StopIteration):
+            next(pages)
+
+    def test_paginator_iteration_empty_disallowed(self):
+        paginator = Paginator([], 2, allow_empty_first_page=False)
+        with self.assertRaises(StopIteration):
+            next(iter(paginator))
+        self.assertEqual(list(paginator), [])
+        with self.assertRaises(EmptyPage):
+            paginator.page(1)
+
+    def test_paginator_iteration_orphans(self):
+        paginator = Paginator([1, 2, 3, 4, 5], 2, orphans=1)
+        self.assertEqual(
+            [(page.number, list(page)) for page in paginator],
+            [(1, [1, 2]), (2, [3, 4, 5])],
+        )
+
+    def test_paginator_iteration_lazy(self):
+        page_range_calls = []
+
+        class RecordingPaginator(Paginator):
+            @property
+            def page_range(self):
+                page_range_calls.append(self)
+                return super().page_range
+
+        paginator = RecordingPaginator([1, 2, 3], 2)
+        with mock.patch.object(paginator, 'page', wraps=paginator.page) as page:
+            pages = iter(paginator)
+            page.assert_not_called()
+            self.assertEqual(page_range_calls, [])
+            self.assertEqual(next(pages).number, 1)
+            self.assertEqual(page_range_calls, [paginator])
+            page.assert_called_once_with(1)
+            self.assertEqual(next(pages).number, 2)
+            self.assertEqual(page.call_args_list, [mock.call(1), mock.call(2)])
+            with self.assertRaises(StopIteration):
+                next(pages)
+            self.assertEqual(page.call_args_list, [mock.call(1), mock.call(2)])
+            self.assertEqual(page_range_calls, [paginator])
+
+    def test_paginator_iteration_custom_page(self):
+        paginator = ValidAdjacentNumsPaginator('abcdefghijk', per_page=6)
+        first, last = paginator
+        for page, number, objects in ((first, 1, 'abcdef'), (last, 2, 'ghijk')):
+            with self.subTest(number=number):
+                self.assertIsInstance(page, ValidAdjacentNumsPage)
+                self.assertIs(page.paginator, paginator)
+                self.assertEqual(page.number, number)
+                self.assertEqual(''.join(page), objects)
+        self.assertIsNone(first.previous_page_number())
+        self.assertEqual(first.next_page_number(), 2)
+        self.assertEqual(last.previous_page_number(), 1)
+        self.assertIsNone(last.next_page_number())
+
+    def test_paginator_iteration_custom_page_range(self):
+        page_calls = []
+
+        class CustomPaginator(Paginator):
+            @property
+            def page_range(self):
+                return (2, 1)
+
+            def page(self, number):
+                page_calls.append(number)
+                return super().page(number)
+
+        paginator = CustomPaginator([1, 2, 3], 2)
+        self.assertEqual(
+            [(page.number, list(page)) for page in paginator],
+            [(2, [3]), (1, [1, 2])],
+        )
+        self.assertEqual(page_calls, [2, 1])
+
+    def test_paginator_iteration_page_error(self):
+        error = ValueError('Cannot create page 2.')
+
+        class FailingPaginator(Paginator):
+            def page(self, number):
+                if number == 2:
+                    raise error
+                return super().page(number)
+
+        pages = iter(FailingPaginator([1, 2, 3], 2))
+        self.assertEqual(next(pages).number, 1)
+        with self.assertRaisesMessage(ValueError, 'Cannot create page 2.') as cm:
+            next(pages)
+        self.assertIs(cm.exception, error)
+
+    def test_paginator_iteration_independent_iterators(self):
+        paginator = Paginator([1, 2, 3], 2)
+        first = iter(paginator)
+        second = iter(paginator)
+        self.assertEqual(next(first).number, 1)
+        self.assertEqual(next(first).number, 2)
+        self.assertEqual(next(second).number, 1)
+        self.assertEqual(next(iter(paginator)).number, 1)
+
+    def test_paginator_iteration_page_range_error(self):
+        error = ValueError('Cannot determine page range.')
+
+        class FailingPaginator(Paginator):
+            @property
+            def page_range(self):
+                raise error
+
+        pages = iter(FailingPaginator([1, 2, 3], 2))
+        with self.assertRaisesMessage(ValueError, 'Cannot determine page range.') as cm:
+            next(pages)
+        self.assertIs(cm.exception, error)
+
     def test_get_page(self):
         """
         Paginator.get_page() returns a valid page even with invalid page
@@ -308,6 +446,33 @@ class ModelPaginationTests(TestCase):
         for x in range(1, 10):
             a = Article(headline='Article %s' % x, pub_date=datetime(2005, 7, 29))
             a.save()
+
+    def test_paginator_iteration(self):
+        paginator = Paginator(Article.objects.order_by('id'), 5)
+        with self.assertNumQueries(0):
+            pages = iter(paginator)
+        with self.assertNumQueries(1):
+            first = next(pages)
+        self.assertEqual(first.number, 1)
+        self.assertIs(first.paginator, paginator)
+        self.assertIsNone(first.object_list._result_cache)
+        with self.assertNumQueries(1):
+            self.assertEqual(
+                [article.headline for article in first],
+                ['Article %s' % number for number in range(1, 6)],
+            )
+        with self.assertNumQueries(0):
+            last = next(pages)
+        self.assertEqual(last.number, 2)
+        self.assertIs(last.paginator, paginator)
+        self.assertIsNone(last.object_list._result_cache)
+        with self.assertNumQueries(1):
+            self.assertEqual(
+                [article.headline for article in last],
+                ['Article %s' % number for number in range(6, 10)],
+            )
+        with self.assertNumQueries(0), self.assertRaises(StopIteration):
+            next(pages)
 
     def test_first_page(self):
         paginator = Paginator(Article.objects.order_by('id'), 5)
