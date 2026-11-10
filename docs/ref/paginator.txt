@@ -14,6 +14,18 @@ classes live in :source:`django/core/paginator.py`.
 
 .. class:: Paginator(object_list, per_page, orphans=0, allow_empty_first_page=True)
 
+    A paginator can be iterated to yield its :class:`Page` objects in order.
+    Iterating a ``Page`` yields the objects on that page, whereas
+    :attr:`Paginator.page_range` yields 1-based page numbers.
+
+    If ``object_list`` is empty, iteration yields one empty page when
+    ``allow_empty_first_page`` is ``True`` (the default), and no pages when it
+    is ``False``.
+
+    .. versionchanged:: 3.1
+
+        Support for iterating over ``Paginator`` was added.
+
 .. attribute:: Paginator.object_list
 
     Required. A list, tuple, ``QuerySet``, or other sliceable object with a
@@ -99,7 +111,7 @@ Attributes
 ==============
 
 You usually won't construct ``Page`` objects by hand -- you'll get them using
-:meth:`Paginator.page`.
+:meth:`Paginator.page` or by iterating over a :class:`Paginator`.
 
 .. class:: Page(object_list, number, paginator)
 
