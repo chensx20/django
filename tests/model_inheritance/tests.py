@@ -174,6 +174,67 @@ class ModelInheritanceTests(TestCase):
 
         self.assertIs(C._meta.parents[A], C._meta.get_field('a'))
 
+    def test_explicit_parent_link_with_one_to_one_field(self):
+        for parent_link_first in (True, False):
+            for separate_pk in (True, False):
+                with self.subTest(parent_link_first=parent_link_first, separate_pk=separate_pk):
+                    with isolate_apps('model_inheritance'):
+                        class Document(models.Model):
+                            pass
+
+                        if parent_link_first:
+                            class Picking(Document):
+                                document_ptr = models.OneToOneField(
+                                    Document, models.CASCADE, parent_link=True, related_name='+',
+                                )
+                                origin = models.OneToOneField(Document, models.PROTECT, related_name='picking')
+                                if separate_pk:
+                                    picking_id = models.IntegerField(primary_key=True)
+                        else:
+                            class Picking(Document):
+                                origin = models.OneToOneField(Document, models.PROTECT, related_name='picking')
+                                document_ptr = models.OneToOneField(
+                                    Document, models.CASCADE, parent_link=True, related_name='+',
+                                )
+                                if separate_pk:
+                                    picking_id = models.IntegerField(primary_key=True)
+
+                        parent_link = Picking._meta.get_field('document_ptr')
+                        origin = Picking._meta.get_field('origin')
+                        self.assertIs(Picking._meta.parents[Document], parent_link)
+                        self.assertIs(Picking._meta.get_ancestor_link(Document), parent_link)
+                        self.assertIs(parent_link.remote_field.parent_link, True)
+                        self.assertIs(parent_link.auto_created, False)
+                        self.assertEqual(
+                            [field for field in Picking._meta.local_fields if field.remote_field and
+                             field.remote_field.parent_link],
+                            [parent_link],
+                        )
+                        expected_pk = Picking._meta.get_field('picking_id') if separate_pk else parent_link
+                        self.assertIs(Picking._meta.pk, expected_pk)
+                        self.assertIs(origin.remote_field.parent_link, False)
+                        self.assertIs(origin.remote_field.on_delete, models.PROTECT)
+                        self.assertEqual(origin.remote_field.related_name, 'picking')
+
+    @isolate_apps('model_inheritance')
+    def test_automatic_parent_link_with_one_to_one_field(self):
+        class Document(models.Model):
+            pass
+
+        class Picking(Document):
+            origin = models.OneToOneField(Document, models.PROTECT, related_name='picking')
+
+        parent_link = Picking._meta.get_field('document_ptr')
+        origin = Picking._meta.get_field('origin')
+        self.assertIs(Picking._meta.parents[Document], parent_link)
+        self.assertIs(Picking._meta.get_ancestor_link(Document), parent_link)
+        self.assertIs(Picking._meta.pk, parent_link)
+        self.assertIs(parent_link.auto_created, True)
+        self.assertIs(parent_link.remote_field.parent_link, True)
+        self.assertIs(origin.remote_field.parent_link, False)
+        self.assertIs(origin.remote_field.on_delete, models.PROTECT)
+        self.assertEqual(origin.remote_field.related_name, 'picking')
+
     @isolate_apps('model_inheritance')
     def test_init_subclass(self):
         saved_kwargs = {}

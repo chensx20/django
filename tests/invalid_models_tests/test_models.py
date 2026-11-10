@@ -3,7 +3,6 @@ import unittest
 from django.conf import settings
 from django.core.checks import Error, Warning
 from django.core.checks.model_checks import _check_lazy_references
-from django.core.exceptions import ImproperlyConfigured
 from django.db import connection, connections, models
 from django.db.models.functions import Lower
 from django.db.models.signals import post_init
@@ -1006,14 +1005,21 @@ class OtherModelTests(SimpleTestCase):
 
         self.assertEqual(ShippingMethod.check(), [])
 
-    def test_missing_parent_link(self):
-        msg = 'Add parent_link=True to invalid_models_tests.ParkingLot.parent.'
-        with self.assertRaisesMessage(ImproperlyConfigured, msg):
-            class Place(models.Model):
-                pass
+    def test_automatic_parent_link(self):
+        class Place(models.Model):
+            pass
 
-            class ParkingLot(Place):
-                parent = models.OneToOneField(Place, models.CASCADE)
+        class ParkingLot(Place):
+            parent = models.OneToOneField(Place, models.CASCADE, related_name='lots')
+
+        parent_link = ParkingLot._meta.get_field('place_ptr')
+        self.assertIs(ParkingLot._meta.parents[Place], parent_link)
+        self.assertIs(ParkingLot._meta.get_ancestor_link(Place), parent_link)
+        self.assertIs(ParkingLot._meta.pk, parent_link)
+        self.assertIs(parent_link.auto_created, True)
+        self.assertIs(parent_link.remote_field.parent_link, True)
+        self.assertIs(ParkingLot._meta.get_field('parent').remote_field.parent_link, False)
+        self.assertEqual(ParkingLot.check(), [])
 
     def test_m2m_table_name_clash(self):
         class Foo(models.Model):
