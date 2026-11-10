@@ -412,6 +412,12 @@ class AuthenticationFormTest(TestDataMixin, TestCase):
         self.assertTrue(form.is_valid())
         self.assertEqual(form.non_field_errors(), [])
 
+    def test_username_field_max_length(self):
+        form = AuthenticationForm()
+        self.assertEqual(form.fields['username'].max_length, 150)
+        self.assertEqual(form.fields['username'].widget.attrs['maxlength'], '150')
+        self.assertIn('maxlength="150"', str(form['username']))
+
     @override_settings(AUTH_USER_MODEL='auth_tests.CustomEmailField')
     def test_username_field_max_length_matches_user_model(self):
         self.assertEqual(CustomEmailField._meta.get_field('username').max_length, 255)
@@ -423,19 +429,49 @@ class AuthenticationFormTest(TestDataMixin, TestCase):
         CustomEmailField.objects.create_user(**data)
         form = AuthenticationForm(None, data)
         self.assertEqual(form.fields['username'].max_length, 255)
+        self.assertEqual(form.fields['username'].widget.attrs['maxlength'], '255')
+        self.assertIn('maxlength="255"', str(form['username']))
         self.assertEqual(form.errors, {})
 
     @override_settings(AUTH_USER_MODEL='auth_tests.IntegerUsernameUser')
     def test_username_field_max_length_defaults_to_254(self):
         self.assertIsNone(IntegerUsernameUser._meta.get_field('username').max_length)
         data = {
-            'username': '0123456',
+            'username': '123456',
             'password': 'password',
         }
         IntegerUsernameUser.objects.create_user(**data)
         form = AuthenticationForm(None, data)
         self.assertEqual(form.fields['username'].max_length, 254)
+        self.assertEqual(form.fields['username'].widget.attrs['maxlength'], '254')
+        self.assertIn('maxlength="254"', str(form['username']))
         self.assertEqual(form.errors, {})
+
+    def test_username_field_hidden_widget(self):
+        class CustomAuthenticationForm(AuthenticationForm):
+            username = CharField(widget=forms.HiddenInput)
+
+        form = CustomAuthenticationForm()
+        self.assertEqual(form.fields['username'].max_length, 150)
+        self.assertNotIn('maxlength', form.fields['username'].widget.attrs)
+        self.assertNotIn('maxlength', str(form['username']))
+
+    def test_username_field_max_length_refresh(self):
+        class CustomAuthenticationForm(AuthenticationForm):
+            username = CharField(
+                label='Login', max_length=75,
+                widget=forms.TextInput(attrs={'class': 'username', 'autocomplete': 'username'}),
+            )
+
+        form = CustomAuthenticationForm()
+        self.assertEqual(form.fields['username'].max_length, 150)
+        self.assertEqual(form.fields['username'].widget.attrs, {
+            'class': 'username', 'autocomplete': 'username', 'maxlength': '150',
+        })
+        self.assertIn('maxlength="150"', str(form['username']))
+        self.assertEqual(form['username'].label, 'Login')
+        self.assertEqual(CustomAuthenticationForm.base_fields['username'].max_length, 75)
+        self.assertEqual(CustomAuthenticationForm.base_fields['username'].widget.attrs['maxlength'], '75')
 
     def test_username_field_label(self):
 
