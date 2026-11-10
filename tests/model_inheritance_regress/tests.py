@@ -300,7 +300,7 @@ class ModelInheritanceTest(TestCase):
         )
 
         self.assertEqual(ParkingLot4B._meta.pk.name, "parent")
-        ParkingLot4A.objects.create(
+        ParkingLot4B.objects.create(
             name="Parking4B",
             address='21 Jump Street',
         )

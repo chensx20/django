@@ -200,9 +200,9 @@ class ModelBase(type):
             # Skip concrete parent classes.
             if base != new_class and not base._meta.abstract:
                 continue
-            # Locate OneToOneField instances.
+            # Locate OneToOneField instances marked as parent links.
             for field in base._meta.local_fields:
-                if isinstance(field, OneToOneField):
+                if isinstance(field, OneToOneField) and field.remote_field.parent_link:
                     related = resolve_relation(new_class, field.remote_field.model)
                     parent_links[make_model_tuple(related)] = field
 
