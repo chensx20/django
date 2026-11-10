@@ -55,6 +55,135 @@ class ModelChoiceFieldTests(TestCase):
         with self.assertRaisesMessage(ValidationError, msg):
             f.clean(c4.id)
 
+    def test_radio_select_empty_label(self):
+        class CustomRadioSelect(forms.RadioSelect):
+            pass
+
+        for widget in (forms.RadioSelect, forms.RadioSelect(), CustomRadioSelect, CustomRadioSelect()):
+            for blank in (False, True):
+                for empty_label in ('---------', 'Choose a category', None):
+                    for required in (False, True):
+                        with self.subTest(widget=widget, blank=blank, empty_label=empty_label, required=required):
+                            with self.assertNumQueries(0):
+                                field = forms.ModelChoiceField(
+                                    Category.objects.all(), widget=widget, blank=blank,
+                                    empty_label=empty_label, required=required,
+                                )
+                            expected_label = empty_label if blank else None
+                            self.assertEqual(field.empty_label, expected_label)
+                            expected = [
+                                (self.c1.pk, 'Entertainment'),
+                                (self.c2.pk, 'A test'),
+                                (self.c3.pk, 'Third'),
+                            ]
+                            if expected_label is not None:
+                                expected.insert(0, ('', expected_label))
+                            self.assertEqual(list(field.choices), expected)
+                            options = list(field.widget.subwidgets('category', None))
+                            self.assertEqual(
+                                [option['value'] for option in options],
+                                [value for value, label in expected],
+                            )
+                            self.assertEqual(
+                                [option['value'] for option in options if option['selected']],
+                                [''] if expected_label is not None else [],
+                            )
+
+    def test_radio_select_initial(self):
+        for blank in (False, True):
+            for required in (False, True):
+                for initial in (self.c2, self.c2.pk):
+                    with self.subTest(blank=blank, required=required, initial=initial):
+                        field = forms.ModelChoiceField(
+                            Category.objects.all(), widget=forms.RadioSelect,
+                            blank=blank, required=required, initial=initial,
+                        )
+                        self.assertEqual(field.empty_label, '---------' if blank and not required else None)
+                        options = field.widget.subwidgets('category', field.prepare_value(initial))
+                        self.assertEqual(
+                            [option['value'] for option in options if option['selected']],
+                            [self.c2.pk],
+                        )
+
+    def test_select_blank(self):
+        for blank in (False, True):
+            for required in (False, True):
+                for initial in (None, self.c1.pk):
+                    with self.subTest(blank=blank, required=required, initial=initial):
+                        field = forms.ModelChoiceField(
+                            Category.objects.all(), blank=blank, required=required, initial=initial,
+                        )
+                        self.assertEqual(field.empty_label, None if required and initial is not None else '---------')
+
+    def test_radio_select_optional(self):
+        field = forms.ModelChoiceField(Category.objects.all(), widget=forms.RadioSelect, required=False)
+        self.assertIsNone(field.empty_label)
+        for value in ('', None):
+            with self.subTest(value=value):
+                self.assertIsNone(field.clean(value))
+        self.assertEqual(field.clean(self.c1.pk), self.c1)
+
+    def test_radio_select_empty_queryset(self):
+        for blank in (False, True):
+            with self.subTest(blank=blank):
+                field = forms.ModelChoiceField(Category.objects.none(), widget=forms.RadioSelect, blank=blank)
+                with self.assertNumQueries(0):
+                    self.assertEqual(len(field.choices), int(blank))
+                    self.assertIs(bool(field.choices), blank)
+                    self.assertEqual(list(field.choices), [('', '---------')] if blank else [])
+
+    def test_radio_select_lazy_queryset(self):
+        with self.assertNumQueries(0):
+            field = forms.ModelChoiceField(queryset=None, widget=forms.RadioSelect)
+            field.queryset = Category.objects.all()
+        with self.assertNumQueries(1):
+            self.assertEqual(len(field.choices), 3)
+        with self.assertNumQueries(1):
+            self.assertIs(bool(field.choices), True)
+        category = Category.objects.create(name='Fourth', slug='fourth', url='fourth')
+        with self.assertNumQueries(1):
+            options = list(field.widget.subwidgets('category', None))
+        self.assertEqual([option['value'] for option in options], [self.c1.pk, self.c2.pk, self.c3.pk, category.pk])
+
+    def test_radio_select_empty_label_not_recomputed(self):
+        field = forms.ModelChoiceField(Category.objects.all())
+        field.widget = forms.RadioSelect()
+        field.required = False
+        self.assertEqual(field.empty_label, '---------')
+        field = forms.ModelChoiceField(Category.objects.all(), widget=forms.RadioSelect)
+        field.widget = forms.Select()
+        field.required = False
+        self.assertIsNone(field.empty_label)
+
+    def test_radio_select_explicit_choices(self):
+        field = forms.ChoiceField(choices=[('', 'Choose'), ('value', 'Value')], widget=forms.RadioSelect)
+        self.assertEqual(field.choices, [('', 'Choose'), ('value', 'Value')])
+        self.assertEqual(
+            [option['value'] for option in field.widget.subwidgets('category', None) if option['selected']],
+            [''],
+        )
+
+    def test_radio_select_custom_label_initial(self):
+        for required in (False, True):
+            with self.subTest(required=required):
+                field = forms.ModelChoiceField(
+                    Category.objects.all(), widget=forms.RadioSelect,
+                    blank=True, required=required, initial=self.c1.pk,
+                    empty_label='Choose a category',
+                )
+                self.assertEqual(field.empty_label, None if required else 'Choose a category')
+
+    def test_model_multiple_choice_blank(self):
+        for blank in (False, True):
+            with self.subTest(blank=blank):
+                field = forms.ModelMultipleChoiceField(Category.objects.all(), blank=blank)
+                self.assertIsNone(field.empty_label)
+                self.assertEqual(list(field.choices), [
+                    (self.c1.pk, 'Entertainment'),
+                    (self.c2.pk, 'A test'),
+                    (self.c3.pk, 'Third'),
+                ])
+
     def test_clean_model_instance(self):
         f = forms.ModelChoiceField(Category.objects.all())
         self.assertEqual(f.clean(self.c1), self.c1)

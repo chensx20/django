@@ -259,6 +259,83 @@ class ModelFormBaseTest(TestCase):
         award = form.save()
         self.assertIsNone(award.character)
 
+    def test_nonblank_nullable_foreign_key_radio(self):
+        class AwardForm(forms.ModelForm):
+            class Meta:
+                model = Award
+                fields = '__all__'
+                widgets = {'character': forms.RadioSelect()}
+
+        character = Character.objects.create(username='user', last_action=datetime.datetime.today())
+        other = Character.objects.create(username='other', last_action=datetime.datetime.today())
+        form = AwardForm()
+        self.assertIs(form.fields['character'].required, True)
+        self.assertIsNone(form.fields['character'].empty_label)
+        self.assertEqual(list(form.fields['character'].choices), [
+            (character.pk, str(character)), (other.pk, str(other)),
+        ])
+        self.assertHTMLEqual(
+            str(form['character']),
+            '<ul id="id_character">'
+            '<li><label for="id_character_0"><input type="radio" name="character" value="%s" '
+            'required id="id_character_0"> %s</label></li>'
+            '<li><label for="id_character_1"><input type="radio" name="character" value="%s" '
+            'required id="id_character_1"> %s</label></li></ul>' %
+            (character.pk, character, other.pk, other)
+        )
+        for data in ({'name': 'Award'}, {'name': 'Award', 'character': ''}):
+            with self.subTest(data=data):
+                form = AwardForm(data)
+                self.assertIs(form.is_valid(), False)
+                self.assertEqual(form.errors, {'character': ['This field is required.']})
+
+        form = AwardForm({'name': 'Award', 'character': character.pk})
+        self.assertIs(form.is_valid(), True)
+        award = form.save()
+        award.refresh_from_db()
+        self.assertEqual(award.character, character)
+        for form, selected in (
+            (AwardForm(instance=award), character.pk),
+            (AwardForm(initial={'character': other.pk}), other.pk),
+            (AwardForm(instance=award, initial={'character': other.pk}), other.pk),
+            (AwardForm(instance=Award.objects.create(name='Unassigned')), None),
+        ):
+            with self.subTest(selected=selected):
+                options = [widget.data for widget in form['character']]
+                self.assertEqual([option['value'] for option in options], [character.pk, other.pk])
+                self.assertEqual(
+                    [option['value'] for option in options if option['selected']],
+                    [] if selected is None else [selected],
+                )
+
+        select_form = modelform_factory(Award, fields=['character'])()
+        self.assertEqual(list(select_form.fields['character'].choices)[0], ('', '---------'))
+
+    def test_blank_foreign_key_radio(self):
+        writer = Writer.objects.create(name='Writer')
+        form = modelform_factory(Book, fields=['author'], widgets={'author': forms.RadioSelect})()
+        self.assertIs(form.fields['author'].required, False)
+        self.assertEqual(list(form.fields['author'].choices), [('', '---------'), (writer.pk, 'Writer')])
+        self.assertEqual(
+            [widget.data['value'] for widget in form['author'] if widget.data['selected']],
+            [''],
+        )
+
+    def test_foreign_key_formfield_blank_override(self):
+        for model, name, blank in ((Award, 'character', True), (Book, 'author', False)):
+            with self.subTest(model=model, blank=blank):
+                model_field = model._meta.get_field(name)
+                field = model_field.formfield(widget=forms.RadioSelect, blank=blank)
+                self.assertEqual(field.empty_label, '---------' if blank else None)
+                self.assertEqual(field.required, not model_field.blank)
+
+    def test_one_to_one_radio_blank(self):
+        for model, blank in ((Author, True), (Author1, False)):
+            with self.subTest(model=model):
+                field = model._meta.get_field('publication').formfield(widget=forms.RadioSelect)
+                self.assertEqual(field.empty_label, '---------' if blank else None)
+                self.assertEqual(field.required, not blank)
+
     def test_save_blank_false_with_required_false(self):
         """
         A ModelForm with a model with a field set to blank=False and the form
