@@ -3,6 +3,7 @@ import os
 import re
 from datetime import datetime, timedelta
 from importlib import import_module
+from unittest import mock
 
 import pytz
 
@@ -14,7 +15,9 @@ from django.contrib.admin.tests import AdminSeleniumTestCase
 from django.contrib.auth.models import User
 from django.core.files.storage import default_storage
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.db.models import CharField, DateField, DateTimeField, UUIDField
+from django.db.models import (
+    CharField, DateField, DateTimeField, ManyToManyField, UUIDField,
+)
 from django.test import SimpleTestCase, TestCase, override_settings
 from django.urls import reverse
 from django.utils import translation
@@ -40,6 +43,10 @@ class AdminFormfieldForDBFieldTests(SimpleTestCase):
     """
     Tests for correct behavior of ModelAdmin.formfield_for_dbfield
     """
+    manytomany_widget_settings = (
+        'autocomplete_fields', 'raw_id_fields', 'filter_vertical',
+        'filter_horizontal',
+    )
 
     def assertFormfield(self, model, fieldname, widgetclass, **admin_overrides):
         """
@@ -116,6 +123,147 @@ class AdminFormfieldForDBFieldTests(SimpleTestCase):
     def test_filtered_many_to_many(self):
         self.assertFormfield(Band, 'members', widgets.FilteredSelectMultiple,
                              filter_vertical=['members'])
+
+    def test_formfield_overrides_m2m_filter_widget(self):
+        formfield = self.assertFormfield(
+            Band, 'members', forms.CheckboxSelectMultiple,
+            filter_vertical=['members'],
+            formfield_overrides={
+                ManyToManyField: {'widget': forms.CheckboxSelectMultiple},
+            },
+        )
+        self.assertIsInstance(formfield.widget, widgets.RelatedFieldWidgetWrapper)
+        self.assertEqual(formfield.help_text, '')
+
+    def test_manytomany_widget_override(self):
+        db_field = Band._meta.get_field('members')
+        for setting in self.manytomany_widget_settings:
+            ma = admin.ModelAdmin(Band, admin.site)
+            setattr(ma, setting, ['members'])
+            for widget in (
+                forms.CheckboxSelectMultiple,
+                forms.CheckboxSelectMultiple(attrs={'class': 'custom'}),
+                None,
+            ):
+                with self.subTest(setting=setting, widget=widget):
+                    formfield = ma.formfield_for_manytomany(
+                        db_field, request=None, widget=widget,
+                    )
+                    if widget is None:
+                        self.assertIs(type(formfield.widget), forms.SelectMultiple)
+                    else:
+                        self.assertIsInstance(formfield.widget, forms.CheckboxSelectMultiple)
+                        self.assertEqual(formfield.help_text, '')
+                        if isinstance(widget, forms.Widget):
+                            self.assertIsNot(formfield.widget, widget)
+                            self.assertEqual(formfield.widget.attrs['class'], 'custom')
+
+    def test_manytomany_formfield_overrides(self):
+        for setting in self.manytomany_widget_settings:
+            for widget in (
+                forms.CheckboxSelectMultiple,
+                forms.CheckboxSelectMultiple(attrs={'class': 'custom'}),
+            ):
+                with self.subTest(setting=setting, widget=widget):
+                    formfield = self.assertFormfield(
+                        Band, 'members', forms.CheckboxSelectMultiple,
+                        **{
+                            setting: ['members'],
+                            'formfield_overrides': {ManyToManyField: {'widget': widget}},
+                        },
+                    )
+                    self.assertEqual(formfield.help_text, '')
+                    if setting == 'raw_id_fields':
+                        self.assertNotIsInstance(formfield.widget, widgets.RelatedFieldWidgetWrapper)
+                    else:
+                        self.assertIsInstance(formfield.widget, widgets.RelatedFieldWidgetWrapper)
+
+    def test_manytomany_widget_kwargs_precedence(self):
+        class BandAdmin(admin.ModelAdmin):
+            formfield_overrides = {ManyToManyField: {'widget': forms.SelectMultiple}}
+
+        db_field = Band._meta.get_field('members')
+        for setting in self.manytomany_widget_settings:
+            ma = BandAdmin(Band, admin.site)
+            setattr(ma, setting, ['members'])
+            with self.subTest(setting=setting):
+                formfield = ma.formfield_for_dbfield(
+                    db_field, request=None, widget=forms.CheckboxSelectMultiple,
+                )
+                widget = formfield.widget
+                if isinstance(widget, widgets.RelatedFieldWidgetWrapper):
+                    widget = widget.widget
+                self.assertIsInstance(widget, forms.CheckboxSelectMultiple)
+                self.assertEqual(formfield.help_text, '')
+
+    def test_manytomany_default_widget_precedence(self):
+        db_field = Band._meta.get_field('members')
+        cases = (
+            ({}, forms.SelectMultiple, None),
+            ({'filter_horizontal': ['members']}, widgets.FilteredSelectMultiple, False),
+            ({'filter_vertical': ['members']}, widgets.FilteredSelectMultiple, True),
+            ({'filter_vertical': ['members'], 'filter_horizontal': ['members']},
+             widgets.FilteredSelectMultiple, True),
+            ({'raw_id_fields': ['members'], 'filter_vertical': ['members']},
+             widgets.ManyToManyRawIdWidget, None),
+            ({'autocomplete_fields': ['members'], 'raw_id_fields': ['members'],
+              'filter_vertical': ['members'], 'filter_horizontal': ['members']},
+             widgets.AutocompleteSelectMultiple, None),
+        )
+        for admin_settings, widget_class, is_stacked in cases:
+            with self.subTest(admin_settings=admin_settings):
+                ma = admin.ModelAdmin(Band, admin.site)
+                for setting, value in admin_settings.items():
+                    setattr(ma, setting, value)
+                formfield = ma.formfield_for_manytomany(db_field, request=None)
+                self.assertIs(type(formfield.widget), widget_class)
+                if is_stacked is not None:
+                    self.assertIs(formfield.widget.is_stacked, is_stacked)
+
+    def test_manytomany_widget_override_queryset(self):
+        class StudentAdmin(admin.ModelAdmin):
+            ordering = ['name']
+
+        site = admin.AdminSite()
+        site.register(Student, StudentAdmin)
+        ma = admin.ModelAdmin(School, site)
+        ma.autocomplete_fields = ['students']
+        db_field = School._meta.get_field('students')
+        queryset = Student.objects.order_by('-name')
+        for explicit_queryset in (False, True):
+            with self.subTest(explicit_queryset=explicit_queryset):
+                kwargs = {'queryset': queryset} if explicit_queryset else {}
+                formfield = ma.formfield_for_manytomany(
+                    db_field, request=None, widget=forms.CheckboxSelectMultiple,
+                    using='other', **kwargs,
+                )
+                self.assertIsInstance(formfield.widget, forms.CheckboxSelectMultiple)
+                self.assertEqual(formfield.queryset.query.order_by, ('-name',) if explicit_queryset else ('name',))
+                self.assertEqual(formfield.queryset.db, 'default' if explicit_queryset else 'other')
+
+    def test_manytomany_widget_override_explicit_through(self):
+        ma = admin.ModelAdmin(Band, admin.site)
+        ma.filter_vertical = ['members']
+        db_field = Band._meta.get_field('members')
+        with mock.patch.object(db_field.remote_field.through._meta, 'auto_created', False):
+            self.assertIsNone(ma.formfield_for_dbfield(
+                db_field, request=None, widget=forms.CheckboxSelectMultiple,
+            ))
+
+    def test_manytomany_widget_override_help_text(self):
+        ma = admin.ModelAdmin(Event, admin.site)
+        ma.filter_vertical = ['supporting_bands']
+        db_field = Event._meta.get_field('supporting_bands')
+        for widget in (forms.CheckboxSelectMultiple, forms.SelectMultiple):
+            with self.subTest(widget=widget):
+                formfield = ma.formfield_for_manytomany(db_field, request=None, widget=widget)
+                self.assertIs(type(formfield.widget), widget)
+                expected = db_field.help_text
+                if widget is forms.SelectMultiple:
+                    expected += ' ' + str(ma.formfield_for_manytomany(
+                        Band._meta.get_field('members'), request=None,
+                    ).help_text)
+                self.assertEqual(formfield.help_text, expected)
 
     def test_formfield_overrides(self):
         self.assertFormfield(Event, 'start_date', forms.TextInput,
