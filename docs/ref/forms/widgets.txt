@@ -325,11 +325,17 @@ foundation for custom widgets.
         to display the ``required`` attribute for each field.
 
         By default, returns ``False`` for hidden widgets and ``True``
-        otherwise. Special cases are :class:`~django.forms.ClearableFileInput`,
-        which returns ``False`` when ``initial`` is set, and
+        otherwise. Special cases are :class:`~django.forms.FileInput` and
+        :class:`~django.forms.ClearableFileInput`, which return ``False`` when
+        ``initial`` is set, and
         :class:`~django.forms.CheckboxSelectMultiple`, which always returns
         ``False`` because browser validation would require all checkboxes to be
         checked instead of at least one.
+
+        .. versionchanged:: 3.1
+
+            :class:`~django.forms.FileInput` now returns ``False`` when
+            ``initial`` is set.
 
         Override this method in custom widgets that aren't compatible with
         browser validation. For example, a WSYSIWG text editor widget backed by

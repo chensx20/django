@@ -18,3 +18,17 @@ class FileInputTest(WidgetTest):
     def test_value_omitted_from_data(self):
         self.assertIs(self.widget.value_omitted_from_data({}, {}, 'field'), True)
         self.assertIs(self.widget.value_omitted_from_data({}, {'field': 'value'}, 'field'), False)
+
+    def test_use_required_attribute(self):
+        for initial, expected in ((None, True), ('', True), ('resume.txt', False), (object(), False)):
+            with self.subTest(initial=initial):
+                self.assertIs(self.widget.use_required_attribute(initial), expected)
+
+    def test_use_required_attribute_hidden(self):
+        class HiddenFileInput(FileInput):
+            input_type = 'hidden'
+
+        widget = HiddenFileInput()
+        for initial in (None, '', 'resume.txt'):
+            with self.subTest(initial=initial):
+                self.assertIs(widget.use_required_attribute(initial), False)

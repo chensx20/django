@@ -2008,6 +2008,25 @@ class FileAndImageFieldTests(TestCase):
             '<input id="id_myfile" name="myfile" type="file">'
         )
 
+    def test_fileinput_initial(self):
+        class FileForm(forms.ModelForm):
+            class Meta:
+                model = TextFile
+                fields = '__all__'
+                widgets = {'file': forms.FileInput}
+
+        instance = TextFile.objects.create(description='Initial', file='tests/test1.txt')
+        initial = instance.file
+        form = FileForm(data={'description': 'Updated'}, instance=instance)
+        self.assertTrue(form.fields['file'].required)
+        self.assertHTMLEqual(str(form['file']), '<input type="file" name="file" id="id_file">')
+        self.assertTrue(form.is_valid())
+        self.assertIs(form.cleaned_data['file'], initial)
+        form.save()
+        instance.refresh_from_db()
+        self.assertEqual(instance.description, 'Updated')
+        self.assertEqual(instance.file.name, 'tests/test1.txt')
+
     def test_file_field_data(self):
         # Test conditions when files is either not given or empty.
         f = TextFileForm(data={'description': 'Assistance'})
