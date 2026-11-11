@@ -2893,6 +2893,25 @@ Good luck picking a username that doesn&#x27;t already exist.</p>
         self.assertTrue(form.is_valid())
         self.assertEqual(form.cleaned_data, {'name': 'fname lname'})
 
+    def test_field_deep_copy_error_messages(self):
+        class TestForm(Form):
+            name = CharField(error_messages={
+                'required': 'Original required',
+                'custom': {'messages': ['Original']},
+            })
+
+        first = TestForm(data={})
+        second = TestForm(data={})
+        first.fields['name'].error_messages['required'] = 'Changed required'
+        first.fields['name'].error_messages['custom']['messages'].append('Changed')
+        self.assertEqual(first.errors['name'], ['Changed required'])
+        for field in [second.fields['name'], TestForm.base_fields['name'], TestForm().fields['name']]:
+            self.assertEqual(field.error_messages['required'], 'Original required')
+            self.assertEqual(field.error_messages['custom'], {'messages': ['Original']})
+            self.assertIsNot(field.error_messages, first.fields['name'].error_messages)
+        self.assertEqual(second.errors['name'], ['Original required'])
+        self.assertEqual(TestForm(data={}).errors['name'], ['Original required'])
+
     def test_multivalue_deep_copy(self):
         """
         #19298 -- MultiValueField needs to override the default as it needs
