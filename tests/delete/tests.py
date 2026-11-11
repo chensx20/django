@@ -1,14 +1,20 @@
 from math import ceil
+from unittest import mock
 
-from django.db import IntegrityError, connection, models
+from django.contrib.admin.utils import NestedObjects
+from django.contrib.contenttypes.fields import GenericRelation
+from django.db import IntegrityError, connection, connections, models
 from django.db.models.deletion import Collector
 from django.db.models.sql.constants import GET_ITERATOR_CHUNK_SIZE
 from django.test import TestCase, skipIfDBFeature, skipUnlessDBFeature
+from django.test.utils import CaptureQueriesContext, isolate_apps
 
 from .models import (
-    MR, A, Avatar, Base, Child, HiddenUser, HiddenUserProfile, M, M2MFrom,
-    M2MTo, MRNull, Origin, Parent, R, RChild, RChildChild, Referrer, S, T,
-    User, create_a, get_default_r,
+    MR, A, ActionOwner, Avatar, Base, Child, DirectedNode, Entry,
+    FastDeleteOwner, HiddenUser, HiddenUserProfile, M, M2MFrom, M2MTo, MRNull,
+    NullableEntry, Origin, Parent, ProtectedEntry, R, RChild, RChildChild,
+    Referrer, S, SymmetricalNode, T, TargetEntry, TargetOwner, User, create_a,
+    get_default_r,
 )
 
 
@@ -490,6 +496,220 @@ class DeletionTests(TestCase):
 
 
 class FastDeleteTests(TestCase):
+    def test_fast_delete_multiple_fks(self):
+        owner = FastDeleteOwner.objects.create()
+        other = FastDeleteOwner.objects.create()
+        for creator, updater in ((owner, other), (other, owner), (owner, owner)):
+            Entry.objects.create(created_by=creator, updated_by=updater, text='hidden')
+        survivor = Entry.objects.create(created_by=other, updated_by=other)
+        with self.assertNumQueries(2) as queries:
+            result = owner.delete()
+        child_delete = queries.captured_queries[0]['sql']
+        self.assertIn('DELETE FROM %s' % connection.ops.quote_name(Entry._meta.db_table), child_delete)
+        self.assertIn(' OR ', child_delete)
+        self.assertEqual(result, (4, {'delete.Entry': 3, 'delete.FastDeleteOwner': 1}))
+        self.assertIsNone(owner.pk)
+        self.assertSequenceEqual(Entry.objects.all(), [survivor])
+        self.assertSequenceEqual(FastDeleteOwner.objects.all(), [other])
+
+    def test_fast_delete_self_m2m(self):
+        for model, deleted_rows in ((DirectedNode, 3), (SymmetricalNode, 5)):
+            with self.subTest(model=model):
+                owner, other, third = [model.objects.create() for _ in range(3)]
+                owner.links.add(other, owner)
+                third.links.add(owner)
+                other.links.add(third)
+                through = model.links.through
+                survivors = list(through.objects.exclude(
+                    models.Q(**{'from_%s' % model._meta.model_name: owner}) |
+                    models.Q(**{'to_%s' % model._meta.model_name: owner})
+                ).values_list('pk', flat=True))
+                with self.assertNumQueries(2) as queries:
+                    result = owner.delete()
+                self.assertIn('DELETE FROM %s' % connection.ops.quote_name(through._meta.db_table),
+                              queries.captured_queries[0]['sql'])
+                self.assertIn(' OR ', queries.captured_queries[0]['sql'])
+                self.assertEqual(result, (deleted_rows + 1, {
+                    through._meta.label: deleted_rows, model._meta.label: 1,
+                }))
+                self.assertIsNone(owner.pk)
+                self.assertCountEqual(model.objects.all(), [other, third])
+                self.assertCountEqual(through.objects.values_list('pk', flat=True), survivors)
+
+    def test_fast_delete_multiple_fks_batches(self):
+        fields = [Entry._meta.get_field(name) for name in ('created_by', 'updated_by')]
+        batch_size = max(connection.ops.bulk_batch_size([field.name for field in fields], [None] * 1001), 1)
+        owners = [FastDeleteOwner.objects.create() for _ in range(batch_size + 1)]
+        batch_size = max(connection.ops.bulk_batch_size([field.name for field in fields], owners), 1)
+        other = FastDeleteOwner.objects.create()
+        Entry.objects.create(created_by=owners[0], updated_by=owners[-1])
+        Entry.objects.create(created_by=other, updated_by=owners[-1])
+        survivor = Entry.objects.create(created_by=other, updated_by=other)
+        child_parameters = []
+
+        def capture(execute, sql, params, many, context):
+            if sql.startswith('DELETE FROM %s ' % connection.ops.quote_name(Entry._meta.db_table)):
+                child_parameters.append(len(params))
+                self.assertIn(' OR ', sql)
+            return execute(sql, params, many, context)
+
+        parent_batches = ceil(len(owners) / GET_ITERATOR_CHUNK_SIZE)
+        child_batches = ceil(len(owners) / batch_size)
+        with connection.execute_wrapper(capture), self.assertNumQueries(1 + child_batches + parent_batches) as queries:
+            result = FastDeleteOwner.objects.exclude(pk=other.pk).delete()
+        self.assertTrue(queries.captured_queries[0]['sql'].startswith('SELECT '))
+        self.assertEqual(child_parameters, [
+            len(owners[i:i + batch_size]) * 2 for i in range(0, len(owners), batch_size)
+        ])
+        if connection.features.max_query_params is not None:
+            self.assertLessEqual(max(child_parameters), connection.features.max_query_params)
+        self.assertEqual(result, (len(owners) + 2, {'delete.Entry': 2, 'delete.FastDeleteOwner': len(owners)}))
+        self.assertSequenceEqual(Entry.objects.all(), [survivor])
+        self.assertSequenceEqual(FastDeleteOwner.objects.all(), [other])
+
+    def test_fast_delete_batch_fields(self):
+        collector = Collector(using='default')
+        objs = [FastDeleteOwner(pk=i) for i in range(5)]
+        fields = [Entry._meta.get_field(name) for name in ('created_by', 'updated_by')]
+        with mock.patch.object(connection.ops, 'bulk_batch_size', return_value=2) as batch_size:
+            self.assertEqual(collector.get_del_batches(objs, fields), [objs[:2], objs[2:4], objs[4:]])
+        batch_size.assert_called_once_with(['created_by', 'updated_by'], objs)
+        with mock.patch.object(connection.ops, 'bulk_batch_size', return_value=0):
+            self.assertEqual(collector.get_del_batches(objs, fields), [[obj] for obj in objs])
+
+    @isolate_apps('delete')
+    def test_fast_delete_three_field_budget(self):
+        class TripleEntry(models.Model):
+            first = models.ForeignKey(FastDeleteOwner, models.CASCADE, related_name='+')
+            second = models.ForeignKey(FastDeleteOwner, models.CASCADE, related_name='+')
+            third = models.ForeignKey(FastDeleteOwner, models.CASCADE, related_name='+')
+
+            class Meta:
+                app_label = 'delete'
+
+        fields = [TripleEntry._meta.get_field(name) for name in ('first', 'second', 'third')]
+        objs = [FastDeleteOwner(pk=i) for i in range(1001)]
+        collector = Collector(using='default')
+        batch_size = max(connection.ops.bulk_batch_size([field.name for field in fields], objs), 1)
+        batches = collector.get_del_batches(objs, fields)
+        self.assertEqual(len(batches), ceil(len(objs) / batch_size))
+        for batch in batches:
+            qs = collector.related_objects(TripleEntry, fields, batch)
+            self.assertIsNone(qs._result_cache)
+            sql, params = qs.query.get_compiler(using=collector.using).as_sql()
+            self.assertEqual(len(params), len(batch) * 3)
+            self.assertIn(' OR ', sql)
+            if connection.features.max_query_params is not None:
+                self.assertLessEqual(len(params), connection.features.max_query_params)
+
+    def test_fast_delete_multiple_fks_signals(self):
+        for signal in (models.signals.pre_delete, models.signals.post_delete):
+            with self.subTest(signal=signal):
+                owner, other = [FastDeleteOwner.objects.create() for _ in range(2)]
+                entries = [Entry.objects.create(created_by=creator, updated_by=updater, text='hidden')
+                           for creator, updater in ((owner, other), (other, owner), (owner, owner))]
+                seen = []
+
+                def receiver(sender, instance, using, **kwargs):
+                    self.assertEqual(using, 'default')
+                    self.assertEqual(instance.text, 'hidden')
+                    self.assertEqual(instance.get_deferred_fields(), set())
+                    seen.append((instance.pk, instance.created_by_id, instance.updated_by_id))
+
+                expected = [(entry.pk, entry.created_by_id, entry.updated_by_id) for entry in entries]
+                signal.connect(receiver, sender=Entry)
+                try:
+                    collector = Collector(using='default')
+                    for objs in (Entry, entries[0], Entry.objects.all()):
+                        self.assertFalse(collector.can_fast_delete(objs))
+                    result = owner.delete()
+                finally:
+                    signal.disconnect(receiver, sender=Entry)
+                self.assertCountEqual(seen, expected)
+                self.assertEqual(result, (4, {'delete.Entry': 3, 'delete.FastDeleteOwner': 1}))
+
+    def test_fast_delete_mixed_set_null(self):
+        owner, other = [ActionOwner.objects.create() for _ in range(2)]
+        NullableEntry.objects.create(cascade=owner, nullable=other)
+        NullableEntry.objects.create(cascade=owner, nullable=owner)
+        survivor = NullableEntry.objects.create(cascade=other, nullable=owner)
+        with CaptureQueriesContext(connection) as queries:
+            result = owner.delete()
+        child_deletes = [query['sql'] for query in queries if query['sql'].startswith(
+            'DELETE FROM %s ' % connection.ops.quote_name(NullableEntry._meta.db_table)
+        )]
+        self.assertEqual(len(child_deletes), 1)
+        self.assertNotIn('nullable_id', child_deletes[0])
+        survivor.refresh_from_db()
+        self.assertIsNone(survivor.nullable_id)
+        self.assertSequenceEqual(NullableEntry.objects.all(), [survivor])
+        self.assertEqual(result, (3, {'delete.NullableEntry': 2, 'delete.ProtectedEntry': 0, 'delete.ActionOwner': 1}))
+
+    def test_fast_delete_mixed_protect(self):
+        owner, other = [ActionOwner.objects.create() for _ in range(2)]
+        for cascade in (owner, other):
+            with self.subTest(cascade=cascade):
+                entry = ProtectedEntry.objects.create(cascade=cascade, protected=owner)
+                with CaptureQueriesContext(connection) as queries:
+                    with self.assertRaisesMessage(models.ProtectedError, 'protected foreign key'):
+                        owner.delete()
+                self.assertTrue(all(query['sql'].startswith('SELECT ') for query in queries))
+                self.assertTrue(ActionOwner.objects.filter(pk=owner.pk).exists())
+                self.assertTrue(ProtectedEntry.objects.filter(pk=entry.pk).exists())
+                entry.delete()
+
+    def test_fast_delete_multiple_non_pk_targets(self):
+        owner = TargetOwner.objects.create(code='owner', number=1234)
+        other = TargetOwner.objects.create(code='other', number=5678)
+        for creator, updater in ((owner, other), (other, owner), (owner, owner)):
+            TargetEntry.objects.create(created_by=creator, updated_by=updater)
+        survivor = TargetEntry.objects.create(created_by=other, updated_by=other)
+        with self.assertNumQueries(2):
+            result = owner.delete()
+        self.assertEqual(result, (4, {'delete.TargetEntry': 3, 'delete.TargetOwner': 1}))
+        self.assertSequenceEqual(TargetEntry.objects.all(), [survivor])
+        self.assertSequenceEqual(TargetOwner.objects.all(), [other])
+
+    def test_fast_delete_model_eligibility(self):
+        collector = Collector(using='default')
+        for model, expected in ((Entry, True), (FastDeleteOwner, False), (Child, False), (Parent, False)):
+            for objs in (model, model(), model.objects.all()):
+                with self.subTest(model=model, objs=type(objs)):
+                    self.assertEqual(collector.can_fast_delete(objs), expected)
+        self.assertFalse(collector.can_fast_delete(object()))
+        parent_link = Child._meta.get_field('parent_ptr')
+        other_field = Entry._meta.get_field('created_by')
+        for objs in (Child, Child(), Child.objects.all()):
+            self.assertTrue(collector.can_fast_delete(objs, from_field=parent_link))
+            self.assertFalse(collector.can_fast_delete(objs, from_field=other_field))
+        for model, name in ((NullableEntry, 'nullable'), (ProtectedEntry, 'protected')):
+            self.assertFalse(collector.can_fast_delete(model, from_field=model._meta.get_field(name)))
+
+    @isolate_apps('delete')
+    def test_fast_delete_generic_relation_eligibility(self):
+        class GenericOwner(models.Model):
+            children = GenericRelation(Entry)
+
+            class Meta:
+                app_label = 'delete'
+
+        collector = Collector(using='default')
+        for objs in (GenericOwner, GenericOwner(), GenericOwner.objects.all()):
+            self.assertFalse(collector.can_fast_delete(objs))
+
+    def test_nested_objects_multiple_fields(self):
+        owner, other = [FastDeleteOwner.objects.create() for _ in range(2)]
+        entry = Entry.objects.create(created_by=owner, updated_by=other)
+        fields = [Entry._meta.get_field(name) for name in ('created_by', 'updated_by')]
+        collector = NestedObjects(using='default')
+        self.assertFalse(collector.can_fast_delete(Entry))
+        qs = collector.related_objects(Entry, fields, [owner])
+        with self.assertNumQueries(1):
+            self.assertSequenceEqual(qs, [entry])
+            self.assertEqual(qs[0].created_by, owner)
+            self.assertEqual(qs[0].updated_by, other)
+        collector.collect([owner])
+        self.assertEqual(collector.edges, {None: [owner], owner: [entry]})
 
     def test_fast_delete_fk(self):
         u = User.objects.create(
@@ -582,3 +802,27 @@ class FastDeleteTests(TestCase):
                 User.objects.filter(avatar__desc='missing').delete(),
                 (0, {'delete.User': 0})
             )
+
+
+class FastDeleteDatabaseTests(TestCase):
+    databases = {'default', 'other'}
+
+    def test_fast_delete_multiple_fks_using(self):
+        for alias in self.databases:
+            owner = FastDeleteOwner.objects.using(alias).create(pk=1)
+            other = FastDeleteOwner.objects.using(alias).create(pk=2)
+            Entry.objects.using(alias).create(created_by=owner, updated_by=owner, text='hidden')
+            Entry.objects.using(alias).create(created_by=other, updated_by=other)
+        collector = Collector(using='other')
+        collector.collect([owner])
+        self.assertEqual(len(collector.fast_deletes), 1)
+        self.assertEqual(collector.fast_deletes[0].db, 'other')
+        with self.assertNumQueries(0), CaptureQueriesContext(connections['other']) as queries:
+            result = FastDeleteOwner.objects.using('other').get(pk=1).delete(using='other')
+        self.assertEqual(len(queries), 3)
+        self.assertIn(' OR ', queries.captured_queries[1]['sql'])
+        self.assertEqual(result, (2, {'delete.Entry': 1, 'delete.FastDeleteOwner': 1}))
+        self.assertEqual(Entry.objects.using('default').count(), 2)
+        self.assertEqual(FastDeleteOwner.objects.using('default').count(), 2)
+        self.assertEqual(Entry.objects.using('other').count(), 1)
+        self.assertEqual(FastDeleteOwner.objects.using('other').count(), 1)
