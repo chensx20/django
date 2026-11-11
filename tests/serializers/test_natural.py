@@ -198,6 +198,8 @@ def pk_with_default(self, format):
     objs = list(serializers.deserialize(format, string_data))
     self.assertEqual(len(objs), 1)
     self.assertEqual(objs[0].object.pk, obj.pk)
+    objs[0].save()
+    self.assertEqual(NaturalPKWithDefault.objects.count(), 1)
 
 
 # Dynamically register tests for each serializer

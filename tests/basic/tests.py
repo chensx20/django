@@ -135,7 +135,7 @@ class ModelInstanceCreationTests(TestCase):
         self.assertTrue(Article.objects.filter(id=a.id).exists())
 
     def test_save_primary_with_default(self):
-        # An UPDATE attempt is skipped when a primary key has default.
+        # An UPDATE attempt is skipped for a generated default primary key.
         with self.assertNumQueries(1):
             PrimaryKeyWithDefault().save()
 

@@ -457,6 +457,17 @@ class FixtureLoadingTests(DumpDataAssertMixin, TestCase):
         self.assertIn('"pk": "%s"' % m1.id, result)
         self.assertIn('"pk": "%s"' % m2.id, result)
 
+    def test_repeated_load_with_uuid_pk(self):
+        obj = PrimaryKeyUUIDModel.objects.create()
+        output = StringIO()
+        management.call_command('dumpdata', 'fixtures.PrimaryKeyUUIDModel', stdout=output)
+        data = output.getvalue()
+        PrimaryKeyUUIDModel.objects.all().delete()
+        for unused in range(2):
+            with mock.patch('django.core.management.commands.loaddata.sys.stdin', StringIO(data)):
+                management.call_command('loaddata', '-', format='json', verbosity=0)
+            self.assertEqual(list(PrimaryKeyUUIDModel.objects.values_list('pk', flat=True)), [obj.pk])
+
     def test_dumpdata_with_file_output(self):
         management.call_command('loaddata', 'fixture1.json', verbosity=0)
         self._dumpdata_assert(
