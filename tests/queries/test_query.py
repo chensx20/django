@@ -1,8 +1,9 @@
 from datetime import datetime
+from unittest import mock
 
 from django.core.exceptions import FieldError
 from django.db.models import CharField, F, Q
-from django.db.models.expressions import SimpleCol
+from django.db.models.expressions import Col, SimpleCol
 from django.db.models.fields.related_lookups import RelatedIsNull
 from django.db.models.functions import Lower
 from django.db.models.lookups import Exact, GreaterThan, IsNull, LessThan
@@ -15,6 +16,92 @@ from .models import Author, Item, ObjectC, Ranking
 
 
 class TestQuery(SimpleTestCase):
+    def test_resolve_lookup_value_iterables(self):
+        query = Query(Author)
+        for value in ([], (), [1, None, 'name'], (1, None, 'name')):
+            with self.subTest(value=value):
+                resolved = query.resolve_lookup_value(value, set(), True, False)
+                self.assertIs(type(resolved), type(value))
+                self.assertEqual(resolved, value)
+
+    def test_resolve_lookup_value_nested_iterables(self):
+        query = Query(Author)
+        for container in (list, tuple):
+            value = container([1, [2, (3, [], ())], (4, [5])])
+            resolved = query.resolve_lookup_value(value, set(), True, False)
+            with self.subTest(container=container):
+                self.assertIs(type(resolved), container)
+                self.assertEqual(resolved, value)
+                self.assertIsNot(resolved[1], value[1])
+                self.assertIsNot(resolved[2][1], value[2][1])
+                self.assertEqual(value, container([1, [2, (3, [], ())], (4, [5])]))
+
+    def test_resolve_lookup_value_expressions(self):
+        query = Query(Author)
+        for container in (list, tuple):
+            for nested in (False, True):
+                for simple_col in (False, True):
+                    field = F('num')
+                    expression = Lower('name')
+                    children = [field, expression, None, 7]
+                    value = container([(children,)] if nested else children)
+                    resolved = query.resolve_lookup_value(value, set(), True, simple_col)
+                    with self.subTest(container=container, nested=nested, simple_col=simple_col):
+                        self.assertIs(type(resolved), container)
+                        if nested:
+                            self.assertIsInstance(resolved[0], tuple)
+                            self.assertIsInstance(resolved[0][0], list)
+                            self.assertIsNot(resolved[0][0], children)
+                            resolved = resolved[0][0]
+                        self.assertIsInstance(resolved[0], SimpleCol if simple_col else Col)
+                        self.assertEqual(resolved[0].target, Author._meta.get_field('num'))
+                        self.assertIsInstance(resolved[1], Lower)
+                        self.assertIsInstance(resolved[1].lhs, Col)
+                        self.assertEqual(resolved[1].lhs.target, Author._meta.get_field('name'))
+                        self.assertEqual(list(resolved[2:]), [None, 7])
+                        self.assertEqual(value, container([(children,)] if nested else children))
+                        self.assertIs(children[0], field)
+                        self.assertIs(children[1], expression)
+                        self.assertEqual(expression.get_source_expressions(), [F('name')])
+
+    def test_resolve_lookup_value_expression_context(self):
+        query = Query(Author)
+        for can_reuse in (None, set(), {'alias'}):
+            for allow_joins in (False, True):
+                for simple_col in (False, True):
+                    for depth in range(3):
+                        for expression in (F('num'), Lower('name')):
+                            value = expression
+                            for container in (list, tuple)[:depth]:
+                                value = container([value])
+                            with self.subTest(
+                                can_reuse=can_reuse, allow_joins=allow_joins,
+                                simple_col=simple_col, depth=depth, expression=expression,
+                            ):
+                                with mock.patch.object(
+                                    expression, 'resolve_expression', wraps=expression.resolve_expression,
+                                ) as resolve_expression:
+                                    query.resolve_lookup_value(value, can_reuse, allow_joins, simple_col)
+                                kwargs = {'reuse': can_reuse, 'allow_joins': allow_joins}
+                                if isinstance(expression, F):
+                                    kwargs['simple_col'] = simple_col
+                                resolve_expression.assert_called_once_with(query, **kwargs)
+                                self.assertIs(resolve_expression.call_args[1]['reuse'], can_reuse)
+
+    def test_resolve_lookup_value_nested_join_not_allowed(self):
+        query = Query(Ranking)
+        msg = 'Joined field references are not permitted in this query'
+        with self.assertRaisesMessage(FieldError, msg):
+            query.resolve_lookup_value([(F('author__num'),)], set(), False, False)
+
+    def test_resolve_lookup_value_other_iterables(self):
+        query = Query(Author)
+        expression = F('num')
+        values = ({'field': expression}, {expression}, iter([expression]))
+        for value in values:
+            with self.subTest(value=value):
+                self.assertIs(query.resolve_lookup_value(value, set(), True, False), value)
+
     def test_simple_query(self):
         query = Query(Author)
         where = query.build_where(Q(num__gt=2))
