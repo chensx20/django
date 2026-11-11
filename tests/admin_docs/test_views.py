@@ -75,6 +75,39 @@ class AdminDocViewTests(TestDataMixin, AdminDocsTestCase):
         # View docstring
         self.assertContains(response, 'Base view for admindocs views.')
 
+    def test_view_detail_first_line_summary(self):
+        url = reverse('django-admindocs-views-detail', args=['admin_docs.views.xview'])
+        with captured_stderr() as stderr:
+            response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(stderr.getvalue(), '')
+        self.assertHTMLEqual(response.context['summary'], '<p>Display a documented view.</p>')
+        self.assertContains(response, '<h2 class="subhead">Display a documented view.</h2>', html=True)
+        paragraph = (
+            '<p>Display an individual <a class="reference external" '
+            'href="/admindocs/models/admin_docs.person/">admin_docs.Person</a>.</p>'
+        )
+        definition = (
+            '<dl class="docutils"><dt><tt class="docutils literal">person</tt></dt>'
+            '<dd>An instance of <a class="reference external" '
+            'href="/admindocs/models/admin_docs.person/">admin_docs.Person</a>.</dd></dl>'
+        )
+        self.assertHTMLEqual(response.context['body'], paragraph + definition)
+        self.assertContains(response, paragraph, html=True)
+        self.assertContains(response, definition, html=True)
+        template = (
+            '<p><a class="reference external" '
+            'href="/admindocs/templates/person.html/">person.html</a></p>'
+        )
+        self.assertEqual(set(response.context['meta']), {'Context', 'Templates'})
+        self.assertHTMLEqual(response.context['meta']['Context'], '<p>the person</p>')
+        self.assertHTMLEqual(response.context['meta']['Templates'], template)
+        self.assertContains(response, '<h3>Context:</h3>')
+        self.assertContains(response, '<p>the person</p>', html=True)
+        self.assertContains(response, '<h3>Templates:</h3>')
+        self.assertContains(response, template, html=True)
+        self.assertNotContains(response, 'system-message')
+
     @override_settings(ROOT_URLCONF='admin_docs.namespace_urls')
     def test_namespaced_view_detail(self):
         url = reverse('django-admindocs-views-detail', args=['admin_docs.views.XViewClass'])

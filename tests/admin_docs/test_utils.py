@@ -3,6 +3,7 @@ import unittest
 from django.contrib.admindocs.utils import (
     docutils_is_available, parse_docstring, parse_rst, trim_docstring,
 )
+from django.test.utils import captured_stderr
 
 from .tests import AdminDocsSimpleTestCase
 
@@ -43,6 +44,56 @@ class TestUtils(AdminDocsSimpleTestCase):
             '(DESCRIPTION)\n\nsome_metadata: some data'
         )
         self.assertEqual(trim_docstring_output, trimmed_docstring)
+
+    def test_trim_docstring_first_line(self):
+        cases = [
+            ('Summary.\n\n    Body paragraph.\n\n    Context: description\n',
+             'Summary.\n\nBody paragraph.\n\nContext: description'),
+            ('Summary\n    continued.\n\n    Body.', 'Summary\ncontinued.\n\nBody.'),
+            ('Summary.', 'Summary.'),
+            ('  Summary.  ', 'Summary.'),
+            ('Summary.\n\n  \n\t', 'Summary.'),
+            (None, ''),
+            ('', ''),
+            (' \t\n  ', ''),
+            ('Summary.\n\n\tBody.\n\t    Nested.', 'Summary.\n\nBody.\n    Nested.'),
+            ('Summary.\n\n    Term\n        Definition.', 'Summary.\n\nTerm\n    Definition.'),
+            ('Summary.\n\n    Example::\n\n        code', 'Summary.\n\nExample::\n\n    code'),
+            ('Summary.\n\nBody.\n    Nested.', 'Summary.\n\nBody.\n    Nested.'),
+            ('  Summary.\n\n    Body.', 'Summary.\n\nBody.'),
+            ('        Summary.\n\n    Body.', 'Summary.\n\nBody.'),
+            ('Summary.  \r\n\r\n    Body.  \r\n', 'Summary.  \n\nBody.'),
+        ]
+        for docstring, expected in cases:
+            with self.subTest(docstring=docstring):
+                self.assertEqual(trim_docstring(docstring), expected)
+
+    def test_parse_docstring_first_line(self):
+        docstring = 'Summary.\n\n    Body paragraph.\n\n    Context: description\n'
+        self.assertEqual(parse_docstring(docstring), (
+            'Summary.', 'Body paragraph.', {'Context': 'description'},
+        ))
+        self.assertEqual(
+            parse_docstring('Summary\n    continued.\n\n    Body.'),
+            ('Summary\ncontinued.', 'Body.', {}),
+        )
+
+    def test_parse_docstring_empty(self):
+        for docstring in (None, '', ' \t\n  '):
+            with self.subTest(docstring=docstring):
+                self.assertEqual(parse_docstring(docstring), ('', '', {}))
+
+    def test_first_line_description_output(self):
+        docstring = 'Summary.\n\n    Display :model:`myapp.MyModel`.\n'
+        title, description, metadata = parse_docstring(docstring)
+        with captured_stderr() as stderr:
+            output = parse_rst(description, 'view')
+        self.assertEqual(stderr.getvalue(), '')
+        self.assertHTMLEqual(output, (
+            '<p>Display <a class="reference external" '
+            'href="/admindocs/models/myapp.mymodel/">myapp.MyModel</a>.</p>'
+        ))
+        self.assertNotIn('system-message', output)
 
     def test_parse_docstring(self):
         title, description, metadata = parse_docstring(self.docstring)
