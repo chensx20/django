@@ -1,17 +1,22 @@
+import json
 from datetime import datetime
 from decimal import Decimal
 
 from django import forms
 from django.conf import settings
-from django.contrib.admin import helpers
+from django.contrib.admin import ModelAdmin, helpers, site
 from django.contrib.admin.utils import (
     NestedObjects, display_for_field, display_for_value, flatten,
     flatten_fieldsets, label_for_field, lookup_field, quote,
 )
+from django.core.serializers.json import DjangoJSONEncoder
 from django.db import DEFAULT_DB_ALIAS, models
+from django.forms.fields import InvalidJSONInput, JSONString
 from django.test import SimpleTestCase, TestCase, override_settings
+from django.test.utils import isolate_apps
 from django.utils.formats import localize
-from django.utils.safestring import mark_safe
+from django.utils.safestring import SafeData, mark_safe
+from django.utils.translation import override
 
 from .models import (
     Article, Car, Count, Event, EventGuide, Location, Site, Vehicle,
@@ -196,6 +201,109 @@ class UtilsTests(SimpleTestCase):
 
         display_value = display_for_field(12345, models.IntegerField(), self.empty_value)
         self.assertEqual(display_value, '12,345')
+
+    def test_jsonfield_display_for_field(self):
+        class JSONFieldSubclass(models.JSONField):
+            pass
+
+        tests = [
+            ({'nested': {'active': True, 'value': None}}, '{"nested": {"active": true, "value": null}}'),
+            ([1, True, None, {'a': 'b'}], '[1, true, null, {"a": "b"}]'),
+            ({}, '{}'),
+            ([], '[]'),
+            (True, 'true'),
+            (False, 'false'),
+            (0, '0'),
+            (12345, '12345'),
+            (12345.6789, '12345.6789'),
+            ('text', '"text"'),
+            ('', '""'),
+            ('{"active": true}', '"{\\"active\\": true}"'),
+            ('a"b\nc', '"a\\"b\\nc"'),
+            ('\u00e9', '"\\u00e9"'),
+            (JSONString('text'), '"text"'),
+            (InvalidJSONInput('{invalid'), '{invalid'),
+            (InvalidJSONInput(''), ''),
+            (None, self.empty_value),
+            (float('nan'), 'NaN'),
+            (float('inf'), 'Infinity'),
+            (float('-inf'), '-Infinity'),
+        ]
+        for field in (models.JSONField(), models.JSONField(choices=[]), JSONFieldSubclass()):
+            for value, expected in tests:
+                with self.subTest(field=field, value=value):
+                    self.assertEqual(display_for_field(value, field, self.empty_value), expected)
+
+    @override_settings(USE_L10N=True, USE_THOUSAND_SEPARATOR=True)
+    def test_jsonfield_display_for_field_not_localized(self):
+        with override('de'):
+            self.assertEqual(
+                display_for_field(12345.6789, models.JSONField(), self.empty_value),
+                '12345.6789',
+            )
+
+    def test_jsonfield_display_for_field_encoder(self):
+        field = models.JSONField(encoder=DjangoJSONEncoder)
+        self.assertEqual(
+            display_for_field({'date': datetime(2020, 1, 2), 'decimal': Decimal('1.25')}, field, self.empty_value),
+            '{"date": "2020-01-02T00:00:00", "decimal": "1.25"}',
+        )
+
+        class CustomEncoder(json.JSONEncoder):
+            def default(self, value):
+                if isinstance(value, complex):
+                    return [value.real, value.imag]
+                return super().default(value)
+
+        self.assertEqual(
+            display_for_field({'value': 1 + 2j}, models.JSONField(encoder=CustomEncoder), self.empty_value),
+            '{"value": [1.0, 2.0]}',
+        )
+
+    def test_jsonfield_display_for_field_invalid(self):
+        for value in (object(), {('a', 'b'): 1}, Decimal('1.25')):
+            with self.subTest(value=value):
+                self.assertEqual(
+                    display_for_field(value, models.JSONField(), self.empty_value),
+                    display_for_value(value, self.empty_value),
+                )
+
+    def test_jsonfield_display_for_field_circular(self):
+        value = []
+        value.append(value)
+        with self.assertRaisesMessage(ValueError, 'Circular reference detected'):
+            display_for_field(value, models.JSONField(), self.empty_value)
+
+    def test_jsonfield_display_for_field_choices(self):
+        field = models.JSONField(choices=[(None, 'No value'), ('selected', 'Selected')])
+        for value, expected in [(None, 'No value'), ('selected', 'Selected'), ('unknown', self.empty_value)]:
+            with self.subTest(value=value):
+                self.assertEqual(display_for_field(value, field, self.empty_value), expected)
+
+    def test_jsonfield_display_for_field_not_safe(self):
+        value = {'html': '<script>alert("x")</script>'}
+        display_value = display_for_field(value, models.JSONField(), self.empty_value)
+        self.assertEqual(display_value, '{"html": "<script>alert(\\"x\\")</script>"}')
+        self.assertNotIsInstance(display_value, SafeData)
+
+    @isolate_apps('admin_utils')
+    def test_jsonfield_readonly_contents(self):
+        class JSONModel(models.Model):
+            payload = models.JSONField()
+
+        class JSONModelForm(forms.ModelForm):
+            class Meta:
+                model = JSONModel
+                fields = []
+
+        model_admin = ModelAdmin(JSONModel, site)
+        model_admin.readonly_fields = ('payload',)
+        form = JSONModelForm(instance=JSONModel(payload={'html': '<script>alert("x")</script>&'}))
+        readonly_field = helpers.AdminReadonlyField(form, 'payload', False, model_admin)
+        self.assertEqual(
+            readonly_field.contents(),
+            '{&quot;html&quot;: &quot;&lt;script&gt;alert(\\&quot;x\\&quot;)&lt;/script&gt;&amp;&quot;}',
+        )
 
     def test_list_display_for_value(self):
         display_value = display_for_value([1, 2, 3], self.empty_value)

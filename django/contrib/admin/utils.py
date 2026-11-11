@@ -2,6 +2,7 @@ import datetime
 import decimal
 from collections import defaultdict
 
+from django import forms
 from django.core.exceptions import FieldDoesNotExist
 from django.db import models, router
 from django.db.models.constants import LOOKUP_SEP
@@ -398,6 +399,12 @@ def display_for_field(value, field, empty_value_display):
         return formats.number_format(value)
     elif isinstance(field, models.FileField) and value:
         return format_html('<a href="{}">{}</a>', value.url, value)
+    elif isinstance(field, models.JSONField):
+        json_field = forms.JSONField(encoder=field.encoder)
+        try:
+            return json_field.prepare_value(value)
+        except TypeError:
+            return display_for_value(value, empty_value_display)
     else:
         return display_for_value(value, empty_value_display)
 
