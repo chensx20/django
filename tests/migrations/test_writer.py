@@ -17,11 +17,11 @@ from django.core.validators import EmailValidator, RegexValidator
 from django.db import migrations, models
 from django.db.migrations.serializer import BaseSerializer
 from django.db.migrations.writer import MigrationWriter, OperationWriter
-from django.test import SimpleTestCase
+from django.test import SimpleTestCase, override_settings
 from django.utils.deconstruct import deconstructible
 from django.utils.functional import SimpleLazyObject
 from django.utils.timezone import get_default_timezone, get_fixed_timezone, utc
-from django.utils.translation import gettext_lazy as _
+from django.utils.translation import gettext_lazy as _, override
 
 from .models import FoodManager, FoodQuerySet
 
@@ -256,6 +256,7 @@ class WriterTests(SimpleTestCase):
         class TextEnum(enum.Enum):
             A = 'a-value'
             B = 'value-b'
+            ALIAS = 'a-value'
 
         class BinaryEnum(enum.Enum):
             A = b'a-value'
@@ -267,15 +268,19 @@ class WriterTests(SimpleTestCase):
 
         self.assertSerializedResultEqual(
             TextEnum.A,
-            ("migrations.test_writer.TextEnum('a-value')", {'import migrations.test_writer'})
+            ("migrations.test_writer.TextEnum['A']", {'import migrations.test_writer'})
         )
         self.assertSerializedResultEqual(
             BinaryEnum.A,
-            ("migrations.test_writer.BinaryEnum(b'a-value')", {'import migrations.test_writer'})
+            ("migrations.test_writer.BinaryEnum['A']", {'import migrations.test_writer'})
+        )
+        self.assertSerializedResultEqual(
+            TextEnum.ALIAS,
+            ("migrations.test_writer.TextEnum['A']", {'import migrations.test_writer'})
         )
         self.assertSerializedResultEqual(
             IntEnum.B,
-            ("migrations.test_writer.IntEnum(2)", {'import migrations.test_writer'})
+            ("migrations.test_writer.IntEnum['B']", {'import migrations.test_writer'})
         )
 
         field = models.CharField(default=TextEnum.B, choices=[(m.value, m) for m in TextEnum])
@@ -283,28 +288,73 @@ class WriterTests(SimpleTestCase):
         self.assertEqual(
             string,
             "models.CharField(choices=["
-            "('a-value', migrations.test_writer.TextEnum('a-value')), "
-            "('value-b', migrations.test_writer.TextEnum('value-b'))], "
-            "default=migrations.test_writer.TextEnum('value-b'))"
+            "('a-value', migrations.test_writer.TextEnum['A']), "
+            "('value-b', migrations.test_writer.TextEnum['B'])], "
+            "default=migrations.test_writer.TextEnum['B'])"
         )
         field = models.CharField(default=BinaryEnum.B, choices=[(m.value, m) for m in BinaryEnum])
         string = MigrationWriter.serialize(field)[0]
         self.assertEqual(
             string,
             "models.CharField(choices=["
-            "(b'a-value', migrations.test_writer.BinaryEnum(b'a-value')), "
-            "(b'value-b', migrations.test_writer.BinaryEnum(b'value-b'))], "
-            "default=migrations.test_writer.BinaryEnum(b'value-b'))"
+            "(b'a-value', migrations.test_writer.BinaryEnum['A']), "
+            "(b'value-b', migrations.test_writer.BinaryEnum['B'])], "
+            "default=migrations.test_writer.BinaryEnum['B'])"
         )
         field = models.IntegerField(default=IntEnum.A, choices=[(m.value, m) for m in IntEnum])
         string = MigrationWriter.serialize(field)[0]
         self.assertEqual(
             string,
             "models.IntegerField(choices=["
-            "(1, migrations.test_writer.IntEnum(1)), "
-            "(2, migrations.test_writer.IntEnum(2))], "
-            "default=migrations.test_writer.IntEnum(1))"
+            "(1, migrations.test_writer.IntEnum['A']), "
+            "(2, migrations.test_writer.IntEnum['B'])], "
+            "default=migrations.test_writer.IntEnum['A'])"
         )
+
+    @override_settings(USE_I18N=True)
+    def test_serialize_lazy_enum(self):
+        with override('en'):
+            class TranslatedEnum(enum.Enum):
+                YES = _('Yes')
+
+            member = TranslatedEnum.YES
+            field = models.CharField(default=member)
+            member_serialization = MigrationWriter.serialize(member)
+            field_serialization = MigrationWriter.serialize(field)
+            self.assertEqual(str(member.value), 'Yes')
+
+        self.assertEqual(
+            member_serialization,
+            (
+                "migrations.test_writer.TranslatedEnum['YES']",
+                {'import migrations.test_writer'},
+            ),
+        )
+        self.assertEqual(
+            field_serialization,
+            (
+                "models.CharField(default=migrations.test_writer.TranslatedEnum['YES'])",
+                {'from django.db import models', 'import migrations.test_writer'},
+            ),
+        )
+        with override('fr'):
+            self.assertEqual(str(member.value), 'Oui')
+            self.assertEqual(MigrationWriter.serialize(member), member_serialization)
+            self.assertEqual(MigrationWriter.serialize(field), field_serialization)
+            translated_enum = enum.Enum('TranslatedEnum', {'YES': _('Yes')}, module=__name__)
+            self.assertEqual(str(translated_enum.YES.value), 'Oui')
+            with mock.patch(__name__ + '.TranslatedEnum', translated_enum, create=True):
+                string, imports = member_serialization
+                result = self.safe_exec(
+                    '%s\ntest_value_result = %s' % ('\n'.join(imports), string),
+                )['test_value_result']
+                self.assertIs(result, translated_enum.YES)
+                string, imports = field_serialization
+                result = self.safe_exec(
+                    '%s\ntest_value_result = %s' % ('\n'.join(imports), string),
+                )['test_value_result']
+                self.assertIsInstance(result, models.CharField)
+                self.assertIs(result.default, translated_enum.YES)
 
     def test_serialize_choices(self):
         class TextChoices(models.TextChoices):
@@ -454,7 +504,7 @@ class WriterTests(SimpleTestCase):
         # Test a string regex with flag
         validator = RegexValidator(r'^[0-9]+$', flags=re.S)
         string = MigrationWriter.serialize(validator)[0]
-        self.assertEqual(string, "django.core.validators.RegexValidator('^[0-9]+$', flags=re.RegexFlag(16))")
+        self.assertEqual(string, "django.core.validators.RegexValidator('^[0-9]+$', flags=re.RegexFlag['DOTALL'])")
         self.serialize_round_trip(validator)
 
         # Test message and code
