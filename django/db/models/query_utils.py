@@ -164,6 +164,14 @@ class DeferredAttribute:
         return None
 
 
+class PrimaryKeyDeferredAttribute(DeferredAttribute):
+    def __set__(self, instance, value):
+        if value is None and not instance._state.initializing:
+            instance._reset_identity()
+        else:
+            instance.__dict__[self.field.attname] = value
+
+
 class RegisterLookupMixin:
 
     @classmethod

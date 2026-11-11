@@ -393,6 +393,7 @@ class ModelStateFieldsCacheDescriptor:
 class ModelState:
     """Store model instance state."""
     db = None
+    initializing = False
     # If true, uniqueness validation checks will consider this a new, unsaved
     # object. Necessary for correct validation of new instances of objects with
     # explicit (non-auto) PKs. This impacts validation only; it has no effect
@@ -414,6 +415,7 @@ class Model(metaclass=ModelBase):
 
         # Set up the storage for instance state
         self._state = ModelState()
+        self._state.initializing = True
 
         # There is a rather weird disparity here; if kwargs, it's set, then args
         # overrides it. It should be one or the other; don't duplicate the work
@@ -500,6 +502,7 @@ class Model(metaclass=ModelBase):
             for kwarg in kwargs:
                 raise TypeError("%s() got an unexpected keyword argument '%s'" % (cls.__name__, kwarg))
         super().__init__()
+        self._state.initializing = False
         post_init.send(sender=cls, instance=self)
 
     @classmethod
@@ -569,9 +572,43 @@ class Model(metaclass=ModelBase):
         return getattr(self, meta.pk.attname)
 
     def _set_pk_val(self, value):
+        if value is None and not self._state.initializing:
+            self._reset_identity()
+            return
         return setattr(self, self._meta.pk.attname, value)
 
     pk = property(_get_pk_val, _set_pk_val)
+
+    def _set_field_value(self, field, value):
+        """Write an internal field value without requesting an identity reset."""
+        if field.primary_key:
+            if field.is_relation and field.is_cached(self) and self.__dict__.get(field.attname) != value:
+                field.delete_cached_value(self)
+            self.__dict__[field.attname] = value
+        else:
+            setattr(self, field.attname, value)
+
+    def _reset_identity(self):
+        """Clear the concrete inheritance identity without loading relations."""
+        models = [self._meta.concrete_model]
+        seen = set()
+        while models:
+            model = models.pop()
+            if model in seen:
+                continue
+            seen.add(model)
+            self._set_field_value(model._meta.pk, None)
+            for parent, link in model._meta.parents.items():
+                models.append(parent._meta.concrete_model)
+                if link:
+                    self._set_field_value(link, None)
+                    if link.is_cached(self):
+                        link.delete_cached_value(self)
+        for relation in self._meta.related_objects:
+            if relation.is_cached(self):
+                relation.delete_cached_value(self)
+        if '_prefetched_objects_cache' in self.__dict__:
+            self._prefetched_objects_cache.clear()
 
     def get_deferred_fields(self):
         """
@@ -631,7 +668,7 @@ class Model(metaclass=ModelBase):
             if field.attname in non_loaded_fields:
                 # This field wasn't refreshed - skip ahead.
                 continue
-            setattr(self, field.attname, getattr(db_instance, field.attname))
+            self._set_field_value(field, getattr(db_instance, field.attname))
             # Clear cached foreign keys.
             if field.is_relation and field.is_cached(self):
                 field.delete_cached_value(self)
@@ -761,6 +798,8 @@ class Model(metaclass=ModelBase):
         using = using or router.db_for_write(self.__class__, instance=self)
         assert not (force_insert and (force_update or update_fields))
         assert update_fields is None or update_fields
+        if self._meta.parents and (force_update or update_fields) and self.pk is None:
+            raise ValueError("Cannot force an update in save() with no primary key.")
         cls = origin = self.__class__
         # Skip proxies, but keep the origin as the proxy model.
         if cls._meta.proxy:
@@ -806,7 +845,7 @@ class Model(metaclass=ModelBase):
             # Make sure the link fields are synced between parent and self.
             if (field and getattr(self, parent._meta.pk.attname) is None and
                     getattr(self, field.attname) is not None):
-                setattr(self, parent._meta.pk.attname, getattr(self, field.attname))
+                self._set_field_value(parent._meta.pk, getattr(self, field.attname))
             parent_inserted = self._save_parents(cls=parent, using=using, update_fields=update_fields)
             updated = self._save_table(
                 cls=parent, using=using, update_fields=update_fields,
@@ -816,7 +855,7 @@ class Model(metaclass=ModelBase):
                 inserted = True
             # Set the parent's PK value to self.
             if field:
-                setattr(self, field.attname, self._get_pk_val(parent._meta))
+                self._set_field_value(field, self._get_pk_val(parent._meta))
                 # Since we didn't have an instance of the parent handy set
                 # attname directly, bypassing the descriptor. Invalidate
                 # the related object cache, in case it's been accidentally
@@ -842,7 +881,7 @@ class Model(metaclass=ModelBase):
         pk_val = self._get_pk_val(meta)
         if pk_val is None:
             pk_val = meta.pk.get_pk_value_on_save(self)
-            setattr(self, meta.pk.attname, pk_val)
+            self._set_field_value(meta.pk, pk_val)
         pk_set = pk_val is not None
         if not pk_set and (force_update or update_fields):
             raise ValueError("Cannot force an update in save() with no primary key.")
@@ -887,7 +926,7 @@ class Model(metaclass=ModelBase):
             returning_fields = meta.db_returning_fields
             results = self._do_insert(cls._base_manager, using, fields, returning_fields, raw)
             for result, field in zip(results, returning_fields):
-                setattr(self, field.attname, result)
+                self._set_field_value(field, result)
         return updated
 
     def _do_update(self, base_qs, using, pk_val, values, update_fields, forced_update):
