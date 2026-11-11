@@ -4,11 +4,18 @@ from django.db import connection, models
 from django.db.models.query_utils import field_attribute
 from django.test import SimpleTestCase, TestCase
 
-from .fields import CustomDescriptorField, CustomTypedField
+from .fields import (
+    BoundMethodSlotDescriptor, CallableSlotDescriptor, ClassSlotDescriptor,
+    CustomDescriptorField, CustomTypedField, InheritedCallableSlotDescriptor,
+    PartialSlotDescriptor, StaticSlotDescriptor,
+)
 from .models import (
-    CustomPrimaryKey, CustomPrimaryKeyChild, GetterOnlyPrimaryKey,
-    GetterOnlyPrimaryKeyChild, NormalizedPrimaryKey, NormalizedPrimaryKeyChild,
-    StandalonePrimaryKey, StandalonePrimaryKeyChild,
+    CallableSlotPrimaryKey, CallableSlotPrimaryKeyChild, CustomPrimaryKey,
+    CustomPrimaryKeyChild, GetterOnlyPrimaryKey, GetterOnlyPrimaryKeyChild,
+    InheritedCallableSlotPrimaryKey, InheritedCallableSlotPrimaryKeyChild,
+    NormalizedPrimaryKey, NormalizedPrimaryKeyChild, PartialSlotPrimaryKey,
+    PartialSlotPrimaryKeyChild, StandalonePrimaryKey,
+    StandalonePrimaryKeyChild,
 )
 
 
@@ -142,6 +149,111 @@ class PrimaryKeyDescriptorTests(TestCase):
 
 
 class DescriptorProtocolTests(TestCase):
+    def test_callable_slots_match_native_dispatch(self):
+        for descriptor_class in (
+            CallableSlotDescriptor, InheritedCallableSlotDescriptor,
+            PartialSlotDescriptor, BoundMethodSlotDescriptor,
+            StaticSlotDescriptor, ClassSlotDescriptor,
+        ):
+            with self.subTest(descriptor=descriptor_class):
+                field = models.CharField()
+                field.set_attributes_from_name('key')
+                field.descriptor_class = descriptor_class
+
+                class NativeOwner:
+                    key = descriptor_class(field)
+
+                native = NativeOwner()
+                native.key = 'original'
+                self.assertEqual(NativeOwner.key, 'descriptor for key')
+                self.assertEqual(native.key, 'original')
+                self.assertEqual(native._key_set_count, 1)
+                del native.key
+                with self.assertRaises(KeyError):
+                    del native.key
+
+                attribute = field_attribute(field)
+                instance = StandalonePrimaryKey(key='initial')
+                count = instance._key_set_count
+                attribute.__set__(instance, 'original')
+                self.assertEqual(instance._key_set_count, count + 1)
+                self.assertEqual(attribute.__get__(None, type(instance)), NativeOwner.key)
+                self.assertEqual(attribute.__get__(instance, type(instance)), 'original')
+                attribute.__delete__(instance)
+                self.assertNotIn('key', instance.__dict__)
+                with self.assertRaises(KeyError):
+                    attribute.__delete__(instance)
+
+    def test_callable_getter_only_preserves_dictionary_precedence(self):
+        class Descriptor:
+            __get__ = CallableSlotDescriptor.__dict__['__get__']
+
+            def __init__(self, field):
+                self.field = field
+
+        field = models.CharField()
+        field.set_attributes_from_name('key')
+        field.descriptor_class = Descriptor
+
+        class NativeOwner:
+            key = Descriptor(field)
+
+        native = NativeOwner()
+        native.key = 'original'
+        self.assertEqual(native.key, 'original')
+        attribute = field_attribute(field)
+        instance = StandalonePrimaryKey(key='original')
+        self.assertEqual(attribute.__get__(None, type(instance)), NativeOwner.key)
+        self.assertEqual(attribute.__get__(instance, type(instance)), native.key)
+        attribute.__set__(instance, 'changed')
+        self.assertEqual(attribute.__get__(instance, type(instance)), 'changed')
+        del native.key
+        attribute.__delete__(instance)
+        self.assertNotIn('key', instance.__dict__)
+        with self.assertRaisesMessage(AttributeError, 'key'):
+            attribute.__delete__(instance)
+
+    def test_callable_slot_inherited_copy_and_lifecycle(self):
+        for parent_model, child_model in (
+            (CallableSlotPrimaryKey, CallableSlotPrimaryKeyChild),
+            (InheritedCallableSlotPrimaryKey, InheritedCallableSlotPrimaryKeyChild),
+            (PartialSlotPrimaryKey, PartialSlotPrimaryKeyChild),
+        ):
+            for name in ('key', 'pk'):
+                with self.subTest(model=child_model, name=name):
+                    original_key = 'original-%s' % name
+                    original = child_model.objects.create(key=original_key, flag=True)
+                    self.assertEqual(original._key_set_count, 1)
+                    parent = parent_model.objects.get(pk=original_key)
+                    child = getattr(parent, child_model._meta.pk.remote_field.get_accessor_name())
+                    self.assertEqual(child._key_set_count, 1)
+                    child.refresh_from_db(fields=['key'])
+                    self.assertEqual(child._key_set_count, 2)
+                    parent = getattr(child, child_model._meta.pk.name)
+                    with self.assertNumQueries(0):
+                        setattr(child, name, None)
+                    self.assertEqual(child._key_set_count, 3)
+                    self.assertIsNone(child.key)
+                    self.assertIsNone(child.pk)
+                    child.flag = False
+                    child.save()
+                    self.assertNotEqual(child.pk, original_key)
+                    self.assertEqual(child.pk, child.key)
+                    self.assertIs(parent_model.objects.get(pk=original_key).flag, True)
+                    self.assertIs(parent_model.objects.get(pk=child.pk).flag, False)
+                    old_child = getattr(parent, child_model._meta.pk.remote_field.get_accessor_name())
+                    self.assertEqual(old_child.pk, original_key)
+                    count = child._key_set_count
+                    child.delete(keep_parents=True)
+                    self.assertEqual(child._key_set_count, count)
+                    self.assertIsNone(child.pk)
+                    self.assertIsNotNone(child.key)
+                    saved_parent = parent_model.objects.get(pk=child.key)
+                    count = saved_parent._key_set_count
+                    saved_parent.delete()
+                    self.assertEqual(saved_parent._key_set_count, count + 1)
+                    self.assertIsNone(saved_parent.key)
+
     def test_standalone_reset_preserves_original(self):
         for parent_model, child_model in (
             (StandalonePrimaryKey, StandalonePrimaryKeyChild),

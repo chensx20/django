@@ -234,6 +234,14 @@ class DeletableFieldAttribute(FieldAttribute):
         instance._state.loaded_fields.discard(self.field.attname)
 
 
+def bind_field_descriptor_method(descriptor, method):
+    """Apply special-method binding without consulting instance attributes."""
+    for cls in inspect.getmro(type(method)):
+        if '__get__' in cls.__dict__:
+            return cls.__dict__['__get__'](method, descriptor, type(descriptor))
+    return method
+
+
 def field_attribute(field):
     """Normalize Python's descriptor protocol once, at field contribution."""
     descriptor = field.descriptor_class(field)
@@ -245,20 +253,24 @@ def field_attribute(field):
     deleter = protocol.get('__delete__')
     if not callable(getter):
         raise TypeError('Field descriptors must define a callable __get__.')
-    read = getter.__get__(descriptor, type(descriptor))
+    # Python invokes raw __get__ slots with the descriptor as the first
+    # argument, including callable objects that have their own __get__.
+    read = functools.partial(getter, descriptor)
     if '__set__' in protocol:
+        setter = bind_field_descriptor_method(descriptor, setter)
         if not callable(setter):
             raise TypeError('Field descriptor __set__ must be callable.')
-        access = FieldDescriptorAccess(descriptor, read, setter.__get__(descriptor, type(descriptor)))
+        access = FieldDescriptorAccess(descriptor, read, setter)
     elif '__delete__' in protocol:
         access = DeleteOnlyFieldAccess(descriptor, read)
     else:
         access = NonDataFieldAccess(field, descriptor, read)
     field.descriptor_access = access
     if '__delete__' in protocol:
+        deleter = bind_field_descriptor_method(descriptor, deleter)
         if not callable(deleter):
             raise TypeError('Field descriptor __delete__ must be callable.')
-        return DeletableFieldAttribute(field, access, deleter.__get__(descriptor, type(descriptor)))
+        return DeletableFieldAttribute(field, access, deleter)
     if '__set__' not in protocol:
         return DeletableFieldAttribute(field, access, access.delete)
     return FieldAttribute(field, access)

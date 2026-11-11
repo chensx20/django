@@ -3,8 +3,9 @@ import uuid
 from django.db import models
 
 from .fields import (
-    CustomDescriptorField, GetterOnlyDescriptorField,
-    NormalizingDescriptorField, StandaloneDescriptorField,
+    CallableSlotField, CustomDescriptorField, GetterOnlyDescriptorField,
+    InheritedCallableSlotField, NormalizingDescriptorField, PartialSlotField,
+    StandaloneDescriptorField,
 )
 
 
@@ -42,4 +43,31 @@ class NormalizedPrimaryKey(models.Model):
 
 
 class NormalizedPrimaryKeyChild(NormalizedPrimaryKey):
+    pass
+
+
+class CallableSlotPrimaryKey(models.Model):
+    key = CallableSlotField(primary_key=True, max_length=36, default=uuid.uuid4)
+    flag = models.BooleanField(default=False)
+
+
+class CallableSlotPrimaryKeyChild(CallableSlotPrimaryKey):
+    pass
+
+
+class InheritedCallableSlotPrimaryKey(models.Model):
+    key = InheritedCallableSlotField(primary_key=True, max_length=36, default=uuid.uuid4)
+    flag = models.BooleanField(default=False)
+
+
+class InheritedCallableSlotPrimaryKeyChild(InheritedCallableSlotPrimaryKey):
+    pass
+
+
+class PartialSlotPrimaryKey(models.Model):
+    key = PartialSlotField(primary_key=True, max_length=36, default=uuid.uuid4)
+    flag = models.BooleanField(default=False)
+
+
+class PartialSlotPrimaryKeyChild(PartialSlotPrimaryKey):
     pass

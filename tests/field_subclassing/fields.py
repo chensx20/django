@@ -1,3 +1,5 @@
+from functools import partial
+
 from django.db import models
 from django.db.models.query_utils import DeferredAttribute
 
@@ -80,3 +82,92 @@ class NormalizingDescriptor(StandaloneDescriptor):
 
 class NormalizingDescriptorField(models.CharField):
     descriptor_class = NormalizingDescriptor
+
+
+class ReadSlot:
+    def __call__(self, descriptor, instance, owner=None):
+        return StandaloneDescriptor.__get__(descriptor, instance, owner)
+
+
+class WriteSlot:
+    def __call__(self, instance, value):
+        instance.__dict__['_key_set_count'] = instance.__dict__.get('_key_set_count', 0) + 1
+        instance.__dict__['key'] = value
+
+
+class DeleteSlot:
+    def __call__(self, instance):
+        del instance.__dict__['key']
+
+
+class CallableSlotDescriptor(StandaloneDescriptor):
+    __get__ = ReadSlot()
+    __set__ = WriteSlot()
+    __delete__ = DeleteSlot()
+
+
+class BindingReadSlot(ReadSlot):
+    def __get__(self, instance, owner):
+        raise AssertionError('Callable protocol slots must not be bound.')
+
+
+class BindingWriteSlot(WriteSlot):
+    def __get__(self, instance, owner):
+        return partial(StandaloneDescriptor.__set__, instance)
+
+
+class BindingDeleteSlot(DeleteSlot):
+    def __get__(self, instance, owner):
+        return DeleteSlot()
+
+
+class BindingSlotDescriptor(StandaloneDescriptor):
+    __get__ = BindingReadSlot()
+    __set__ = BindingWriteSlot()
+    __delete__ = BindingDeleteSlot()
+
+
+class InheritedCallableSlotDescriptor(BindingSlotDescriptor):
+    pass
+
+
+class PartialSlotDescriptor(StandaloneDescriptor):
+    __get__ = partial(StandaloneDescriptor.__get__)
+    __set__ = partial(WriteSlot())
+    __delete__ = partial(DeleteSlot())
+
+
+class BoundMethodSlotDescriptor(StandaloneDescriptor):
+    __get__ = ReadSlot().__call__
+    __set__ = WriteSlot().__call__
+    __delete__ = DeleteSlot().__call__
+
+
+class StaticSlotDescriptor(StandaloneDescriptor):
+    __get__ = ReadSlot()
+    __set__ = staticmethod(WriteSlot())
+    __delete__ = staticmethod(DeleteSlot())
+
+
+class ClassSlotDescriptor(StandaloneDescriptor):
+    __get__ = ReadSlot()
+
+    @classmethod
+    def __set__(cls, instance, value):
+        WriteSlot()(instance, value)
+
+    @classmethod
+    def __delete__(cls, instance):
+        DeleteSlot()(instance)
+
+
+class CallableSlotField(models.CharField):
+    descriptor_class = CallableSlotDescriptor
+
+
+class InheritedCallableSlotField(models.CharField):
+    descriptor_class = InheritedCallableSlotDescriptor
+
+
+class PartialSlotField(models.CharField):
+    descriptor_class = PartialSlotDescriptor
