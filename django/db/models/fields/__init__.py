@@ -764,10 +764,10 @@ class Field(RegisterLookupMixin):
             # if you have a classmethod and a field with the same name, then
             # such fields can't be deferred (we don't have a check for this).
             if not getattr(cls, self.attname, None):
-                descriptor_class = self.descriptor_class
-                if self.primary_key and descriptor_class is DeferredAttribute:
-                    descriptor_class = PrimaryKeyDeferredAttribute
-                setattr(cls, self.attname, descriptor_class(self))
+                descriptor = self.descriptor_class(self)
+                if self.primary_key:
+                    descriptor = PrimaryKeyDeferredAttribute(self, descriptor)
+                setattr(cls, self.attname, descriptor)
         if self.choices is not None:
             if not hasattr(cls, 'get_%s_display' % self.name):
                 setattr(

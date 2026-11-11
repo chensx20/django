@@ -4,6 +4,8 @@ automatic behavior).
 """
 import uuid
 
+from field_subclassing.fields import CustomDescriptorField
+
 from django.db import models
 
 
@@ -37,6 +39,11 @@ class WithDefaultPK(models.Model):
 
 class WithFalsyDefaultPK(models.Model):
     key = models.IntegerField(primary_key=True, default=0)
+    value = models.IntegerField(default=0)
+
+
+class WithCustomDescriptorPK(models.Model):
+    key = CustomDescriptorField(primary_key=True, max_length=36, default=uuid.uuid4)
     value = models.IntegerField(default=0)
 
 

@@ -9,11 +9,69 @@ from django.test import TestCase
 
 from .models import (
     ConcreteDefaultPK, DefaultPKChild, DefaultPKGrandchild, DefaultPKProxy,
-    WithCustomPK, WithDefaultPK, WithFalsyDefaultPK,
+    WithCustomDescriptorPK, WithCustomPK, WithDefaultPK, WithFalsyDefaultPK,
 )
 
 
 class DefaultPrimaryKeyTests(TestCase):
+    def test_custom_descriptor_generated_default(self):
+        obj = WithCustomDescriptorPK(value=1)
+        self.assertEqual(obj._key_set_count, 1)
+        self.assertEqual(obj.key, obj.__dict__['key'])
+        self.assertEqual(obj._key_get_count, 1)
+        with self.assertNumQueries(1) as queries:
+            obj.save()
+        self.assertTrue(queries[0]['sql'].startswith('INSERT'))
+        self.assertEqual(obj._key_set_count, 1)
+        self.assertEqual(WithCustomDescriptorPK.objects.get(pk=obj.pk).value, 1)
+
+    def test_custom_descriptor_assigned_keys(self):
+        for attribute in ('pk', 'key'):
+            for same_value in (False, True):
+                for existing in (False, True):
+                    with self.subTest(attribute=attribute, same_value=same_value, existing=existing):
+                        obj = WithCustomDescriptorPK(value=2)
+                        key = obj.pk if same_value else uuid.uuid4()
+                        if existing:
+                            WithCustomDescriptorPK.objects.create(pk=key, value=1)
+                        setattr(obj, attribute, key)
+                        self.assertEqual(obj._key_set_count, 2)
+                        with self.assertNumQueries(1 if existing else 2) as queries:
+                            obj.save()
+                        self.assertTrue(queries[0]['sql'].startswith('UPDATE'))
+                        self.assertNotIn('key', obj._generated_pk_fields)
+                        self.assertEqual(WithCustomDescriptorPK.objects.get(pk=key).value, 2)
+
+    def test_custom_descriptor_constructor_keys(self):
+        for constructor, assignments in (
+            (lambda key: WithCustomDescriptorPK(pk=key, value=2), 2),
+            (lambda key: WithCustomDescriptorPK(key=key, value=2), 1),
+            (lambda key: WithCustomDescriptorPK(key, 2), 1),
+        ):
+            with self.subTest(constructor=constructor):
+                original = WithCustomDescriptorPK.objects.create(value=1)
+                obj = constructor(original.pk)
+                self.assertEqual(obj._key_set_count, assignments)
+                with self.assertNumQueries(1) as queries:
+                    obj.save()
+                self.assertTrue(queries[0]['sql'].startswith('UPDATE'))
+                self.assertEqual(WithCustomDescriptorPK.objects.get(pk=original.pk).value, 2)
+
+    def test_custom_descriptor_generated_collision(self):
+        obj = WithCustomDescriptorPK(value=2)
+        WithCustomDescriptorPK.objects.create(pk=obj.pk, value=1)
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            obj.save()
+        self.assertEqual(WithCustomDescriptorPK.objects.get(pk=obj.pk).value, 1)
+
+    def test_custom_descriptor_save_time_generation(self):
+        obj = WithCustomDescriptorPK(key=None)
+        with self.assertNumQueries(1) as queries:
+            obj.save()
+        self.assertTrue(queries[0]['sql'].startswith('INSERT'))
+        self.assertEqual(obj._key_set_count, 2)
+        self.assertIsNotNone(obj.pk)
+
     def test_generated_default(self):
         field = WithDefaultPK._meta.pk
         with mock.patch.object(field, 'get_default', wraps=field.get_default) as default:

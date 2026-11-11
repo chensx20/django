@@ -164,13 +164,29 @@ class DeferredAttribute:
         return None
 
 
-class PrimaryKeyDeferredAttribute(DeferredAttribute):
+class PrimaryKeyDeferredAttribute:
+    def __init__(self, field, descriptor):
+        self.field = field
+        self.descriptor = descriptor
+        # Non-data descriptors use instance storage for assignment/deletion.
+        self._set = getattr(descriptor, '__set__', self._set_value)
+        self._delete = getattr(descriptor, '__delete__', self._delete_value)
+
+    def __get__(self, instance, cls=None):
+        return self.descriptor.__get__(instance, cls)
+
     def __set__(self, instance, value):
         instance._generated_pk_fields -= {self.field.attname}
-        instance.__dict__[self.field.attname] = value
+        self._set(instance, value)
 
     def __delete__(self, instance):
         instance._generated_pk_fields -= {self.field.attname}
+        self._delete(instance)
+
+    def _set_value(self, instance, value):
+        instance.__dict__[self.field.attname] = value
+
+    def _delete_value(self, instance):
         del instance.__dict__[self.field.attname]
 
 
