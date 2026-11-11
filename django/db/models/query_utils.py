@@ -164,6 +164,16 @@ class DeferredAttribute:
         return None
 
 
+class PrimaryKeyDeferredAttribute(DeferredAttribute):
+    def __set__(self, instance, value):
+        instance._generated_pk_fields -= {self.field.attname}
+        instance.__dict__[self.field.attname] = value
+
+    def __delete__(self, instance):
+        instance._generated_pk_fields -= {self.field.attname}
+        del instance.__dict__[self.field.attname]
+
+
 class RegisterLookupMixin:
 
     @classmethod

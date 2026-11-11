@@ -395,13 +395,14 @@ class ModelState:
     db = None
     # If true, uniqueness validation checks will consider this a new, unsaved
     # object. Necessary for correct validation of new instances of objects with
-    # explicit (non-auto) PKs. This impacts validation only; it has no effect
-    # on the actual save.
+    # explicit (non-auto) PKs. Also used to optimize saving generated PKs.
     adding = True
     fields_cache = ModelStateFieldsCacheDescriptor()
 
 
 class Model(metaclass=ModelBase):
+    # Immutable so shallow copies cannot change another instance's provenance.
+    _generated_pk_fields = frozenset()
 
     def __init__(self, *args, **kwargs):
         # Alias some things as locals to avoid repeat global lookups
@@ -447,6 +448,7 @@ class Model(metaclass=ModelBase):
 
         for field in fields_iter:
             is_related_object = False
+            generated_default = False
             # Virtual field
             if field.attname not in kwargs and field.column is None:
                 continue
@@ -462,6 +464,7 @@ class Model(metaclass=ModelBase):
                             val = kwargs.pop(field.attname)
                         except KeyError:
                             val = field.get_default()
+                            generated_default = True
                 else:
                     try:
                         val = kwargs.pop(field.attname)
@@ -471,8 +474,10 @@ class Model(metaclass=ModelBase):
                         # get_default() to be evaluated, and then not used.
                         # Refs #12057.
                         val = field.get_default()
+                        generated_default = True
             else:
                 val = field.get_default()
+                generated_default = True
 
             if is_related_object:
                 # If we are passed a related instance, set it using the
@@ -484,6 +489,8 @@ class Model(metaclass=ModelBase):
             else:
                 if val is not _DEFERRED:
                     _setattr(self, field.attname, val)
+                    if generated_default and field.primary_key and field.has_default():
+                        self._generated_pk_fields |= {field.attname}
 
         if kwargs:
             property_names = opts._property_names
@@ -779,7 +786,7 @@ class Model(metaclass=ModelBase):
         with context_manager:
             parent_inserted = False
             if not raw:
-                parent_inserted = self._save_parents(cls, using, update_fields)
+                parent_inserted = self._save_parents(cls, using, update_fields, force_update)
             updated = self._save_table(
                 raw, cls, force_insert or parent_inserted,
                 force_update, using, update_fields,
@@ -798,25 +805,36 @@ class Model(metaclass=ModelBase):
 
     save_base.alters_data = True
 
-    def _save_parents(self, cls, using, update_fields):
+    def _save_parents(self, cls, using, update_fields, force_update=False):
         """Save all the parents of cls using values from self."""
         meta = cls._meta
         inserted = False
         for parent, field in meta.parents.items():
             # Make sure the link fields are synced between parent and self.
-            if (field and getattr(self, parent._meta.pk.attname) is None and
+            # Supplied links take precedence over generated ancestor defaults,
+            # but do not replace explicitly supplied ancestor identities.
+            if (field and (getattr(self, parent._meta.pk.attname) is None or
+                           parent._meta.pk.attname in self._generated_pk_fields) and
                     getattr(self, field.attname) is not None):
                 setattr(self, parent._meta.pk.attname, getattr(self, field.attname))
-            parent_inserted = self._save_parents(cls=parent, using=using, update_fields=update_fields)
+                if field.attname in self._generated_pk_fields:
+                    self._generated_pk_fields |= {parent._meta.pk.attname}
+            parent_inserted = self._save_parents(
+                cls=parent, using=using, update_fields=update_fields, force_update=force_update,
+            )
             updated = self._save_table(
                 cls=parent, using=using, update_fields=update_fields,
                 force_insert=parent_inserted,
+                force_update=force_update,
             )
             if not updated:
                 inserted = True
             # Set the parent's PK value to self.
             if field:
+                generated = parent._meta.pk.attname in self._generated_pk_fields
                 setattr(self, field.attname, self._get_pk_val(parent._meta))
+                if generated:
+                    self._generated_pk_fields |= {field.attname}
                 # Since we didn't have an instance of the parent handy set
                 # attname directly, bypassing the descriptor. Invalidate
                 # the related object cache, in case it's been accidentally
@@ -843,16 +861,21 @@ class Model(metaclass=ModelBase):
         if pk_val is None:
             pk_val = meta.pk.get_pk_value_on_save(self)
             setattr(self, meta.pk.attname, pk_val)
+            if pk_val is not None and meta.pk.has_default():
+                self._generated_pk_fields |= {meta.pk.attname}
         pk_set = pk_val is not None
         if not pk_set and (force_update or update_fields):
             raise ValueError("Cannot force an update in save() with no primary key.")
         updated = False
-        # Skip an UPDATE when adding an instance and primary key has a default.
+        # Skip an UPDATE only for an unmodified, generated default primary key.
         if (
+            not raw and
             not force_insert and
+            not force_update and not update_fields and
             self._state.adding and
-            self._meta.pk.default and
-            self._meta.pk.default is not NOT_PROVIDED
+            meta.pk.attname in self._generated_pk_fields and
+            meta.pk.default and
+            meta.pk.default is not NOT_PROVIDED
         ):
             force_insert = True
         # If possible, try an UPDATE. If that doesn't update anything, do an INSERT.

@@ -2,6 +2,8 @@
 Tests for forcing insert and update queries (instead of Django's normal
 automatic behavior).
 """
+import uuid
+
 from django.db import models
 
 
@@ -26,3 +28,37 @@ class SubCounter(Counter):
 class WithCustomPK(models.Model):
     name = models.IntegerField(primary_key=True)
     value = models.IntegerField()
+
+
+class WithDefaultPK(models.Model):
+    key = models.UUIDField(primary_key=True, default=uuid.uuid4)
+    value = models.IntegerField(default=0)
+
+
+class WithFalsyDefaultPK(models.Model):
+    key = models.IntegerField(primary_key=True, default=0)
+    value = models.IntegerField(default=0)
+
+
+class DefaultPKChild(WithDefaultPK):
+    child_value = models.IntegerField(default=0)
+
+
+class DefaultPKGrandchild(DefaultPKChild):
+    grandchild_value = models.IntegerField(default=0)
+
+
+class DefaultPKProxy(WithDefaultPK):
+    class Meta:
+        proxy = True
+
+
+class AbstractDefaultPK(models.Model):
+    key = models.UUIDField(primary_key=True, default=uuid.uuid4)
+
+    class Meta:
+        abstract = True
+
+
+class ConcreteDefaultPK(AbstractDefaultPK):
+    value = models.IntegerField(default=0)
