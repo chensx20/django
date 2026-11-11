@@ -1,5 +1,5 @@
 from django.db.backends.ddl_references import (
-    Columns, ForeignKeyName, IndexName, Statement, Table,
+    Columns, ForeignKeyName, IndexColumns, IndexName, Statement, Table,
 )
 from django.test import SimpleTestCase
 
@@ -55,6 +55,69 @@ class ColumnsTests(TableTests):
 
     def test_str(self):
         self.assertEqual(str(self.reference), 'FIRST_COLUMN, SECOND_COLUMN')
+
+
+class ColumnsRenderingTests(SimpleTestCase):
+    def test_suffixes(self):
+        tests = [
+            ({}, '"first_column", "second_column"'),
+            ({'col_suffixes': ['', '']}, '"first_column", "second_column"'),
+            ({'col_suffixes': ['DESC', 'DESC']}, '"first_column" DESC, "second_column" DESC'),
+            ({'col_suffixes': ['', 'DESC']}, '"first_column", "second_column" DESC'),
+            ({'col_suffixes': ['DESC', '']}, '"first_column" DESC, "second_column"'),
+            ({'col_suffixes': ['DESC']}, '"first_column" DESC, "second_column"'),
+            ({'col_suffixes': ['']}, '"first_column", "second_column"'),
+        ]
+        for kwargs, expected in tests:
+            with self.subTest(**kwargs):
+                reference = Columns(
+                    'table', ['first_column', 'second_column'],
+                    lambda column: '"%s"' % column, **kwargs,
+                )
+                self.assertEqual(str(reference), expected)
+
+
+class IndexColumnsTests(SimpleTestCase):
+    def test_suffixes(self):
+        tests = [
+            ({}, '"first_column" text_pattern_ops, "second_column" varchar_pattern_ops'),
+            ({'col_suffixes': ['', '']}, '"first_column" text_pattern_ops, "second_column" varchar_pattern_ops'),
+            (
+                {'col_suffixes': ['DESC', 'DESC']},
+                '"first_column" text_pattern_ops DESC, "second_column" varchar_pattern_ops DESC',
+            ),
+            (
+                {'col_suffixes': ['', 'DESC']},
+                '"first_column" text_pattern_ops, "second_column" varchar_pattern_ops DESC',
+            ),
+            (
+                {'col_suffixes': ['DESC', '']},
+                '"first_column" text_pattern_ops DESC, "second_column" varchar_pattern_ops',
+            ),
+            ({'col_suffixes': ['DESC']}, '"first_column" text_pattern_ops DESC, "second_column" varchar_pattern_ops'),
+            ({'col_suffixes': ['']}, '"first_column" text_pattern_ops, "second_column" varchar_pattern_ops'),
+        ]
+        for kwargs, expected in tests:
+            with self.subTest(**kwargs):
+                reference = IndexColumns(
+                    'table', ['first_column', 'second_column'],
+                    lambda column: '"%s"' % column,
+                    opclasses=['text_pattern_ops', 'varchar_pattern_ops'], **kwargs,
+                )
+                self.assertEqual(str(reference), expected)
+
+    def test_rename_references(self):
+        reference = IndexColumns(
+            'table', ['first_column', 'second_column'],
+            lambda column: '"%s"' % column, col_suffixes=['', 'DESC'],
+            opclasses=['text_pattern_ops', 'varchar_pattern_ops'],
+        )
+        reference.rename_table_references('table', 'other_table')
+        reference.rename_column_references('other_table', 'second_column', 'renamed_column')
+        self.assertIs(reference.references_table('other_table'), True)
+        self.assertIs(reference.references_column('other_table', 'second_column'), False)
+        self.assertIs(reference.references_column('other_table', 'renamed_column'), True)
+        self.assertEqual(str(reference), '"first_column" text_pattern_ops, "renamed_column" varchar_pattern_ops DESC')
 
 
 class IndexNameTests(ColumnsTests):
