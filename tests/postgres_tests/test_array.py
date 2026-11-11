@@ -1010,6 +1010,19 @@ class TestSplitFormField(PostgreSQLSimpleTestCase):
             'Item 3 in the array did not validate: Ensure this value has at most 2 characters (it has 4).',
         ])
 
+    @modify_settings(INSTALLED_APPS={'append': 'django.contrib.postgres'})
+    def test_render_boolean_initial(self):
+        class SplitForm(forms.Form):
+            array = SplitArrayField(forms.BooleanField(required=False), size=3, required=False)
+
+        form = SplitForm(initial={'array': [False, True, False]})
+        self.assertFalse(form.is_bound)
+        self.assertHTMLEqual(str(form['array']), '''
+            <input id="id_array_0" name="array_0" type="checkbox">
+            <input id="id_array_1" name="array_1" type="checkbox" checked>
+            <input id="id_array_2" name="array_2" type="checkbox">
+        ''')
+
     def test_splitarraywidget_value_omitted_from_data(self):
         class Form(forms.ModelForm):
             field = SplitArrayField(forms.IntegerField(), required=False, size=2)
@@ -1123,6 +1136,37 @@ class TestSplitFormWidget(PostgreSQLWidgetTestCase):
                 """
             )
         )
+
+    def test_render_boolean(self):
+        tests = [
+            ([False, True, False], 3, '''
+                <input name="array_0" type="checkbox" {attrs[0]}>
+                <input name="array_1" type="checkbox" {attrs[1]} checked>
+                <input name="array_2" type="checkbox" {attrs[2]}>
+            '''),
+            ([True, False, True, False], 4, '''
+                <input name="array_0" type="checkbox" {attrs[0]} checked>
+                <input name="array_1" type="checkbox" {attrs[1]}>
+                <input name="array_2" type="checkbox" {attrs[2]} checked>
+                <input name="array_3" type="checkbox" {attrs[3]}>
+            '''),
+            ([True], 3, '''
+                <input name="array_0" type="checkbox" {attrs[0]} checked>
+                <input name="array_1" type="checkbox" {attrs[1]}>
+                <input name="array_2" type="checkbox" {attrs[2]}>
+            '''),
+        ]
+        for value, size, html in tests:
+            for attrs in (None, {'id': 'foo', 'class': 'checkbox'}):
+                with self.subTest(value=value, size=size, attrs=attrs):
+                    expected_attrs = [
+                        'id="foo_%s" class="checkbox"' % index if attrs else ''
+                        for index in range(size)
+                    ]
+                    self.check_html(
+                        SplitArrayWidget(forms.CheckboxInput(), size=size),
+                        'array', value, attrs=attrs, html=html.format(attrs=expected_attrs),
+                    )
 
     def test_value_omitted_from_data(self):
         widget = SplitArrayWidget(forms.TextInput(), size=2)
