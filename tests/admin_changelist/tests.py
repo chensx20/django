@@ -14,6 +14,7 @@ from django.db.models import F
 from django.db.models.fields import Field, IntegerField
 from django.db.models.functions import Upper
 from django.db.models.lookups import Contains, Exact
+from django.forms.models import BaseModelFormSet
 from django.template import Context, Template, TemplateSyntaxError
 from django.test import TestCase, override_settings
 from django.test.client import RequestFactory
@@ -818,6 +819,79 @@ class ChangeListTests(TestCase):
         request = self.factory.post(changelist_url, data=data)
         pks = m._get_edited_object_pks(request, prefix='form')
         self.assertEqual(sorted(pks), sorted([str(a.pk), str(b.pk), str(c.pk)]))
+
+    def test_get_edited_object_pks_literal_prefixes(self):
+        a = Swallow.objects.create(origin='Swallow A', load=4, speed=1)
+        b = Swallow.objects.create(origin='Swallow B', load=2, speed=2)
+        decoy = Swallow.objects.create(origin='Decoy', load=5, speed=5)
+        m = SwallowAdmin(Swallow, custom_site)
+        for prefix in ('form', 'form[0]', 'form.name', 'form+', 'form('):
+            with self.subTest(prefix=prefix):
+                data = {
+                    '%s-0-uuid' % prefix: str(a.pk),
+                    '%s-12-uuid' % prefix: str(b.pk),
+                    '%s-TOTAL_FORMS' % prefix: '13',
+                    '%s-INITIAL_FORMS' % prefix: '13',
+                    '%s-0-load' % prefix: '9',
+                    '%s-x-uuid' % prefix: str(decoy.pk),
+                    '%s-0-id' % prefix: str(decoy.pk),
+                    '%s-0-uuid-extra' % prefix: str(decoy.pk),
+                    'form0-1-uuid': str(decoy.pk),
+                    'formXname-1-uuid': str(decoy.pk),
+                }
+                request = self.factory.post('/swallow/', data)
+                pks = m._get_edited_object_pks(request, prefix=prefix)
+                self.assertEqual(sorted(pks), sorted([str(a.pk), str(b.pk)]))
+
+    def test_get_list_editable_queryset_with_regex_chars_in_prefix(self):
+        a = Swallow.objects.create(origin='Swallow A', load=4, speed=1)
+        decoy = Swallow.objects.create(origin='Decoy', load=2, speed=2)
+        request = self.factory.post('/swallow/', {
+            'form[0]-0-uuid': str(a.pk),
+            'form0-1-uuid': str(decoy.pk),
+        })
+        m = SwallowAdmin(Swallow, custom_site)
+        queryset = m._get_list_editable_queryset(request, prefix='form[0]')
+        self.assertEqual(list(queryset), [a])
+
+    def test_changelist_view_list_editable_literal_prefix_preserves_objects(self):
+        class LiteralPrefixFormSet(BaseModelFormSet):
+            @classmethod
+            def get_default_prefix(cls):
+                return 'form[0]'
+
+        class LiteralPrefixSwallowAdmin(SwallowAdmin):
+            def get_changelist_formset(self, request, **kwargs):
+                return super().get_changelist_formset(request, formset=LiteralPrefixFormSet, **kwargs)
+
+        a = Swallow.objects.create(origin='Swallow A', load=4, speed=1)
+        b = Swallow.objects.create(origin='Swallow B', load=2, speed=2)
+        original_pks = {a.pk, b.pk}
+        original_count = Swallow.objects.count()
+        changelist_url = reverse('admin:admin_changelist_swallow_changelist')
+        request = self.factory.post(changelist_url, {
+            'form[0]-TOTAL_FORMS': '1',
+            'form[0]-INITIAL_FORMS': '1',
+            'form[0]-MIN_NUM_FORMS': '0',
+            'form[0]-MAX_NUM_FORMS': '1000',
+            'form[0]-0-uuid': str(a.pk),
+            'form[0]-0-load': '9',
+            'form[0]-0-speed': '9',
+            'form0-1-uuid': str(b.pk),
+            '_save': 'Save',
+        })
+        request.user = self.superuser
+        request._messages = CookieStorage(request)
+        request._dont_enforce_csrf_checks = True
+        m = LiteralPrefixSwallowAdmin(Swallow, custom_site)
+        response = m.changelist_view(request)
+        self.assertEqual(response.status_code, 302)
+        a.refresh_from_db()
+        b.refresh_from_db()
+        self.assertEqual((a.origin, a.load, a.speed), ('Swallow A', 9, 9))
+        self.assertEqual((b.origin, b.load, b.speed), ('Swallow B', 2, 2))
+        self.assertEqual(Swallow.objects.count(), original_count)
+        self.assertEqual(set(Swallow.objects.values_list('pk', flat=True)), original_pks)
 
     def test_get_list_editable_queryset(self):
         a = Swallow.objects.create(origin='Swallow A', load=4, speed=1)
