@@ -2166,6 +2166,57 @@ class SchemaTests(TransactionTestCase):
             False,
         )
 
+    @isolate_apps('schema')
+    @skipUnlessDBFeature('allows_multiple_constraints_on_same_fields')
+    def test_index_together_with_unique_together(self):
+        class IndexedUnique(Model):
+            first = IntegerField(db_column='first_column')
+            second = IntegerField(db_column='second_column')
+
+            class Meta:
+                app_label = 'schema'
+                index_together = [('first', 'second')]
+                unique_together = [('first', 'second')]
+
+        with connection.schema_editor() as editor:
+            editor.create_model(IndexedUnique)
+        self.isolated_local_models.append(IndexedUnique)
+        table = IndexedUnique._meta.db_table
+        columns = ['first_column', 'second_column']
+        constraints = self.get_constraints(table)
+        unique_names = {
+            name for name, details in constraints.items()
+            if details['columns'] == columns and details['unique']
+        }
+        self.assertEqual(len(unique_names), 1)
+        IndexedUnique.objects.create(first=1, second=2)
+        index_together = IndexedUnique._meta.index_together
+        for old_indexes, new_indexes, expected_count in [
+            (index_together, [], 0),
+            ([], index_together, 1),
+        ]:
+            with self.subTest(index_together=new_indexes):
+                constraints = self.get_constraints(table)
+                self.assertEqual(sum(
+                    details['index'] and not details['unique']
+                    for details in constraints.values()
+                    if details['columns'] == columns
+                ), 1 - expected_count)
+                with connection.schema_editor() as editor:
+                    editor.alter_index_together(IndexedUnique, old_indexes, new_indexes)
+                constraints = self.get_constraints(table)
+                self.assertEqual({
+                    name for name, details in constraints.items()
+                    if details['columns'] == columns and details['unique']
+                }, unique_names)
+                self.assertEqual(sum(
+                    details['index'] and not details['unique']
+                    for details in constraints.values()
+                    if details['columns'] == columns
+                ), expected_count)
+                with self.assertRaises(IntegrityError), atomic():
+                    IndexedUnique.objects.create(first=1, second=2)
+
     def test_index_together_with_fk(self):
         """
         Tests removing and adding index_together constraints that include

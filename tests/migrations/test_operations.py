@@ -1755,6 +1755,89 @@ class OperationTests(OperationTestBase):
         self.assertEqual(definition[1], [])
         self.assertEqual(definition[2], {'name': "Pony", 'index_together': {("pink", "weight")}})
 
+    def _test_alter_index_together_with_unique_together(self, app_label, index):
+        project_state = self.apply_operations(app_label, ProjectState(), [
+            migrations.CreateModel(
+                'Pony',
+                [
+                    ('id', models.AutoField(primary_key=True)),
+                    ('pink', models.IntegerField()),
+                    ('weight', models.IntegerField()),
+                ],
+                options={
+                    'index_together': [('pink', 'weight')],
+                    'unique_together': [('pink', 'weight')],
+                },
+            ),
+        ])
+        model = project_state.apps.get_model(app_label, 'Pony')
+        table = model._meta.db_table
+        with connection.cursor() as cursor:
+            constraints = connection.introspection.get_constraints(cursor, table)
+        unique_names = {
+            name for name, details in constraints.items()
+            if details['columns'] == ['pink', 'weight'] and details['unique']
+        }
+        legacy_names = {
+            name for name, details in constraints.items()
+            if details['columns'] == ['pink', 'weight'] and details['index'] and not details['unique']
+        }
+        self.assertEqual(len(unique_names), 1)
+        self.assertEqual(len(legacy_names), 1)
+        model.objects.create(pink=1, weight=2)
+        operations = [migrations.AlterIndexTogether('Pony', [])]
+        expected_indexes = [legacy_names, set()]
+        if index is not None:
+            operations.append(migrations.AddIndex('Pony', index))
+            expected_indexes.append({index.name})
+        states = [project_state]
+        for operation in operations:
+            new_state = states[-1].clone()
+            operation.state_forwards(app_label, new_state)
+            self.assertEqual(new_state.models[app_label, 'pony'].options['index_together'], [])
+            self.assertEqual(
+                new_state.models[app_label, 'pony'].options['unique_together'],
+                [('pink', 'weight')],
+            )
+            states.append(new_state)
+        self.assertEqual(
+            project_state.models[app_label, 'pony'].options['index_together'],
+            [('pink', 'weight')],
+        )
+        for backwards in (False, True):
+            positions = reversed(range(len(operations))) if backwards else range(len(operations))
+            for position in positions:
+                with self.subTest(backwards=backwards, operation=operations[position]):
+                    operation = operations[position]
+                    with connection.schema_editor() as editor:
+                        if backwards:
+                            operation.database_backwards(app_label, editor, states[position + 1], states[position])
+                        else:
+                            operation.database_forwards(app_label, editor, states[position], states[position + 1])
+                    with connection.cursor() as cursor:
+                        constraints = connection.introspection.get_constraints(cursor, table)
+                    self.assertEqual({
+                        name for name, details in constraints.items()
+                        if details['columns'] == ['pink', 'weight'] and details['unique']
+                    }, unique_names)
+                    self.assertEqual({
+                        name for name, details in constraints.items()
+                        if details['columns'] == ['pink', 'weight'] and details['index'] and not details['unique']
+                    }, expected_indexes[position if backwards else position + 1])
+                    with self.assertRaises(IntegrityError), atomic():
+                        model.objects.create(pink=1, weight=2)
+
+    @skipUnlessDBFeature('allows_multiple_constraints_on_same_fields')
+    def test_alter_index_together_with_unique_together(self):
+        self._test_alter_index_together_with_unique_together('test_alintounique', None)
+
+    @skipUnlessDBFeature('allows_multiple_constraints_on_same_fields')
+    def test_alter_index_together_to_index_with_unique_together(self):
+        self._test_alter_index_together_with_unique_together(
+            'test_alintouniqueindex',
+            models.Index(fields=['pink', 'weight'], name='pony_pink_weight_idx'),
+        )
+
     def test_alter_index_together_remove(self):
         operation = migrations.AlterIndexTogether("Pony", None)
         self.assertEqual(operation.describe(), "Alter index_together for Pony (0 constraint(s))")
