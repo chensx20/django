@@ -75,6 +75,19 @@ class SchemaIndexesTests(TestCase):
         index_sql = connection.schema_editor()._model_indexes_sql(IndexTogetherSingleList)
         self.assertEqual(len(index_sql), 1)
 
+    @skipUnlessDBFeature('supports_index_column_ordering')
+    def test_index_descending_sql(self):
+        editor = connection.schema_editor()
+        for fields, expected in [
+            (['-headline'], '(%s DESC)' % editor.quote_name('headline')),
+            (['headline', '-pub_date'], '(%s, %s DESC)' % (
+                editor.quote_name('headline'), editor.quote_name('pub_date'),
+            )),
+        ]:
+            with self.subTest(fields=fields):
+                index = Index(fields=fields, name='test_descending')
+                self.assertIn(expected, str(index.create_sql(Article, editor)))
+
 
 @skipIf(connection.vendor == 'postgresql', 'opclasses are PostgreSQL only')
 class SchemaIndexesNotPostgreSQLTests(TransactionTestCase):
@@ -146,6 +159,10 @@ class SchemaIndexesPostgreSQLTests(TransactionTestCase):
             opclasses=['varchar_pattern_ops'],
         )
         with connection.schema_editor() as editor:
+            self.assertIn(
+                '(%s varchar_pattern_ops)' % editor.quote_name('headline'),
+                str(index.create_sql(IndexedArticle2, editor)),
+            )
             editor.add_index(IndexedArticle2, index)
         with editor.connection.cursor() as cursor:
             cursor.execute(self.get_opclass_query % 'test_ops_class')
@@ -158,6 +175,12 @@ class SchemaIndexesPostgreSQLTests(TransactionTestCase):
             opclasses=['varchar_pattern_ops', 'text_pattern_ops'],
         )
         with connection.schema_editor() as editor:
+            self.assertIn(
+                '(%s varchar_pattern_ops, %s text_pattern_ops)' % (
+                    editor.quote_name('headline'), editor.quote_name('body'),
+                ),
+                str(index.create_sql(IndexedArticle2, editor)),
+            )
             editor.add_index(IndexedArticle2, index)
         with editor.connection.cursor() as cursor:
             cursor.execute(self.get_opclass_query % 'test_ops_class_multiple')
@@ -166,6 +189,38 @@ class SchemaIndexesPostgreSQLTests(TransactionTestCase):
                 ('text_pattern_ops', 'test_ops_class_multiple'),
             )
             self.assertCountEqual(cursor.fetchall(), expected_ops_classes)
+
+    def test_ops_class_mixed_order(self):
+        for fields, orders in [
+            (['headline', '-body'], ['', ' DESC']),
+            (['-headline', 'body'], [' DESC', '']),
+        ]:
+            with self.subTest(fields=fields):
+                index = Index(
+                    name='test_ops_class_mixed', fields=fields,
+                    opclasses=['varchar_pattern_ops', 'text_pattern_ops'],
+                )
+                with connection.schema_editor() as editor:
+                    self.assertIn(
+                        '(%s varchar_pattern_ops%s, %s text_pattern_ops%s)' % (
+                            editor.quote_name('headline'), orders[0],
+                            editor.quote_name('body'), orders[1],
+                        ),
+                        str(index.create_sql(IndexedArticle2, editor)),
+                    )
+                    editor.add_index(IndexedArticle2, index)
+                with connection.cursor() as cursor:
+                    cursor.execute(self.get_opclass_query % index.name)
+                    self.assertCountEqual(cursor.fetchall(), [
+                        ('varchar_pattern_ops', index.name),
+                        ('text_pattern_ops', index.name),
+                    ])
+                    constraints = connection.introspection.get_constraints(cursor, IndexedArticle2._meta.db_table)
+                self.assertEqual(constraints[index.name]['orders'], [
+                    'DESC' if field.startswith('-') else 'ASC' for field in fields
+                ])
+                with connection.schema_editor() as editor:
+                    editor.remove_index(IndexedArticle2, index)
 
     def test_ops_class_partial(self):
         index = Index(
@@ -204,6 +259,10 @@ class SchemaIndexesPostgreSQLTests(TransactionTestCase):
             opclasses=['text_pattern_ops'],
         )
         with connection.schema_editor() as editor:
+            self.assertIn(
+                '(%s text_pattern_ops DESC)' % editor.quote_name('body'),
+                str(index.create_sql(IndexedArticle2, editor)),
+            )
             editor.add_index(IndexedArticle2, index)
         with editor.connection.cursor() as cursor:
             cursor.execute(self.get_opclass_query % indexname)
