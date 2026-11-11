@@ -166,10 +166,24 @@ class DeferredAttribute:
 
 class PrimaryKeyDeferredAttribute(DeferredAttribute):
     def __set__(self, instance, value):
-        if value is None and not instance._state.initializing:
+        if value is None and not (instance._state.initializing or instance._state.setting_field):
             instance._reset_identity()
         else:
-            instance.__dict__[self.field.attname] = value
+            self._set_value(instance, value)
+
+    def _set_value(self, instance, value):
+        instance.__dict__[self.field.attname] = value
+
+    @classmethod
+    @functools.lru_cache(maxsize=None)
+    def for_descriptor(cls, descriptor_class):
+        """Compose reset interception with a field's deferred descriptor."""
+        if descriptor_class is DeferredAttribute:
+            return cls
+        attributes = {}
+        if hasattr(descriptor_class, '__set__'):
+            attributes['_set_value'] = descriptor_class.__set__
+        return type('PrimaryKey%s' % descriptor_class.__name__, (cls, descriptor_class), attributes)
 
 
 class RegisterLookupMixin:

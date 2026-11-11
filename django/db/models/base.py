@@ -394,6 +394,7 @@ class ModelState:
     """Store model instance state."""
     db = None
     initializing = False
+    setting_field = False
     # If true, uniqueness validation checks will consider this a new, unsaved
     # object. Necessary for correct validation of new instances of objects with
     # explicit (non-auto) PKs. This impacts validation only; it has no effect
@@ -572,7 +573,7 @@ class Model(metaclass=ModelBase):
         return getattr(self, meta.pk.attname)
 
     def _set_pk_val(self, value):
-        if value is None and not self._state.initializing:
+        if value is None and not (self._state.initializing or self._state.setting_field):
             self._reset_identity()
             return
         return setattr(self, self._meta.pk.attname, value)
@@ -581,12 +582,12 @@ class Model(metaclass=ModelBase):
 
     def _set_field_value(self, field, value):
         """Write an internal field value without requesting an identity reset."""
-        if field.primary_key:
-            if field.is_relation and field.is_cached(self) and self.__dict__.get(field.attname) != value:
-                field.delete_cached_value(self)
-            self.__dict__[field.attname] = value
-        else:
+        setting_field = self._state.setting_field
+        self._state.setting_field = True
+        try:
             setattr(self, field.attname, value)
+        finally:
+            self._state.setting_field = setting_field
 
     def _reset_identity(self):
         """Clear the concrete inheritance identity without loading relations."""

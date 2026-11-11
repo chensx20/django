@@ -765,8 +765,8 @@ class Field(RegisterLookupMixin):
             # such fields can't be deferred (we don't have a check for this).
             if not getattr(cls, self.attname, None):
                 descriptor_class = self.descriptor_class
-                if self.primary_key and descriptor_class is DeferredAttribute:
-                    descriptor_class = PrimaryKeyDeferredAttribute
+                if self.primary_key and issubclass(descriptor_class, DeferredAttribute):
+                    descriptor_class = PrimaryKeyDeferredAttribute.for_descriptor(descriptor_class)
                 setattr(cls, self.attname, descriptor_class(self))
         if self.choices is not None:
             if not hasattr(cls, 'get_%s_display' % self.name):
