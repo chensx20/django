@@ -1,14 +1,16 @@
 import unittest
 from datetime import datetime
+from unittest import mock
 
 from django.test import SimpleTestCase, ignore_warnings
 from django.utils.datastructures import MultiValueDict
 from django.utils.deprecation import RemovedInDjango40Warning
 from django.utils.http import (
     base36_to_int, escape_leading_slashes, http_date, int_to_base36,
-    is_safe_url, is_same_domain, parse_etags, parse_http_date, quote_etag,
-    url_has_allowed_host_and_scheme, urlencode, urlquote, urlquote_plus,
-    urlsafe_base64_decode, urlsafe_base64_encode, urlunquote, urlunquote_plus,
+    is_safe_url, is_same_domain, parse_etags, parse_http_date,
+    parse_http_date_safe, quote_etag, url_has_allowed_host_and_scheme,
+    urlencode, urlquote, urlquote_plus, urlsafe_base64_decode,
+    urlsafe_base64_encode, urlunquote, urlunquote_plus,
 )
 
 
@@ -316,9 +318,73 @@ class HttpDateProcessingTests(unittest.TestCase):
         parsed = parse_http_date('Sun, 06 Nov 1994 08:49:37 GMT')
         self.assertEqual(datetime.utcfromtimestamp(parsed), datetime(1994, 11, 6, 8, 49, 37))
 
-    def test_parsing_rfc850(self):
+    @mock.patch('django.utils.http.datetime.datetime', wraps=datetime)
+    def test_parsing_rfc850(self, mocked_datetime):
+        mocked_datetime.utcnow.return_value = datetime(2020, 1, 1)
         parsed = parse_http_date('Sunday, 06-Nov-94 08:49:37 GMT')
         self.assertEqual(datetime.utcfromtimestamp(parsed), datetime(1994, 11, 6, 8, 49, 37))
+
+    def test_parsing_rfc850_years(self):
+        tests = (
+            (datetime(2020, 1, 1), '69', 2069),
+            (datetime(2020, 1, 1), '70', 2070),
+            (datetime(2020, 1, 1), '71', 1971),
+            (datetime(2020, 12, 31, 23, 59, 59), '70', 2070),
+            (datetime(2020, 1, 1), '00', 2000),
+            (datetime(2019, 1, 1), '70', 1970),
+            (datetime(2069, 1, 1), '94', 2094),
+            (datetime(2100, 1, 1), '00', 2100),
+            (datetime(2100, 1, 1), '50', 2150),
+            (datetime(2100, 1, 1), '51', 2051),
+        )
+        for now, year, expected_year in tests:
+            with self.subTest(now=now, year=year):
+                with mock.patch('django.utils.http.datetime.datetime', wraps=datetime) as mocked_datetime:
+                    mocked_datetime.utcnow.return_value = now
+                    parsed = parse_http_date('Sunday, 06-Nov-%s 08:49:37 GMT' % year)
+                self.assertIsInstance(parsed, int)
+                self.assertEqual(datetime.utcfromtimestamp(parsed), datetime(expected_year, 11, 6, 8, 49, 37))
+                mocked_datetime.utcnow.assert_called_once_with()
+
+    @mock.patch('django.utils.http.datetime.datetime', wraps=datetime)
+    def test_parsing_four_digit_years(self, mocked_datetime):
+        mocked_datetime.utcnow.return_value = datetime(2100, 1, 1)
+        for date in ('Sun, 06 Nov 1994 08:49:37 GMT', 'Sun Nov  6 08:49:37 1994'):
+            with self.subTest(date=date):
+                parsed = parse_http_date(date)
+                self.assertEqual(datetime.utcfromtimestamp(parsed), datetime(1994, 11, 6, 8, 49, 37))
+        mocked_datetime.utcnow.assert_not_called()
+
+    @mock.patch('django.utils.http.datetime.datetime', wraps=datetime)
+    def test_parsing_leap_dates(self, mocked_datetime):
+        for current_year, expected_year in ((2020, 2000), (2100, None)):
+            with self.subTest(current_year=current_year):
+                mocked_datetime.utcnow.return_value = datetime(current_year, 1, 1)
+                date = 'Tuesday, 29-Feb-00 08:49:37 GMT'
+                if expected_year is None:
+                    with self.assertRaisesRegex(ValueError, 'is not a valid date$'):
+                        parse_http_date(date)
+                    self.assertIsNone(parse_http_date_safe(date))
+                else:
+                    parsed = parse_http_date(date)
+                    self.assertEqual(datetime.utcfromtimestamp(parsed), datetime(expected_year, 2, 29, 8, 49, 37))
+                    self.assertEqual(parse_http_date_safe(date), parsed)
+
+    @mock.patch('django.utils.http.datetime.datetime', wraps=datetime)
+    def test_parsing_safe(self, mocked_datetime):
+        mocked_datetime.utcnow.return_value = datetime(2020, 1, 1)
+        for date in (
+            'Sunday, 06-Nov-70 08:49:37 GMT',
+            'Sun, 06 Nov 2070 08:49:37 GMT',
+            'Sun Nov  6 08:49:37 2070',
+        ):
+            with self.subTest(date=date):
+                parsed = parse_http_date_safe(date)
+                self.assertIsInstance(parsed, int)
+                self.assertEqual(datetime.utcfromtimestamp(parsed), datetime(2070, 11, 6, 8, 49, 37))
+        for date in ('invalid', 'Sunday, 31-Nov-70 08:49:37 GMT', 'Sunday, 06-Nov-70 24:49:37 GMT', None):
+            with self.subTest(date=date):
+                self.assertIsNone(parse_http_date_safe(date))
 
     def test_parsing_asctime(self):
         parsed = parse_http_date('Sun Nov  6 08:49:37 1994')
