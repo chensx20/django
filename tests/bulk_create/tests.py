@@ -1,6 +1,9 @@
 from operator import attrgetter
+from unittest import mock, skipUnless
 
-from django.db import IntegrityError, NotSupportedError, connection
+from django.db import (
+    IntegrityError, NotSupportedError, connection, transaction,
+)
 from django.db.models import FileField, Value
 from django.db.models.functions import Lower
 from django.test import (
@@ -213,6 +216,95 @@ class BulkCreateTests(TestCase):
         TwoFields.objects.all().delete()
         with self.assertNumQueries(1):
             TwoFields.objects.bulk_create(objs, len(objs))
+
+    @skipUnlessDBFeature('has_bulk_insert')
+    def test_batch_size_backend_limit(self):
+        def batch_limit(fields, batch):
+            self.assertEqual([field.name for field in fields], field_names)
+            self.assertEqual(batch, objs)
+            return 2
+
+        for explicit_pk in (False, True):
+            for batch_size, num_queries in ((None, 3), (1, 5), (10, 3)):
+                with self.subTest(explicit_pk=explicit_pk, batch_size=batch_size), transaction.atomic():
+                    objs = [
+                        TwoFields(id=i + 1 if explicit_pk else None, f1=i, f2=i + 1)
+                        for i in range(5)
+                    ]
+                    field_names = ['id', 'f1', 'f2'] if explicit_pk else ['f1', 'f2']
+                    with mock.patch.object(connection.ops, 'bulk_batch_size', side_effect=batch_limit) as mocked_limit:
+                        with self.assertNumQueries(num_queries):
+                            created = TwoFields.objects.bulk_create(objs, batch_size=batch_size)
+                    self.assertEqual(created, objs)
+                    mocked_limit.assert_called_once_with(mock.ANY, objs)
+                    self.assertSequenceEqual(
+                        TwoFields.objects.order_by('f1').values_list('f1', 'f2'),
+                        [(i, i + 1) for i in range(5)],
+                    )
+                    ids = list(TwoFields.objects.order_by('f1').values_list('pk', flat=True))
+                    self.assertEqual(len(set(ids)), 5)
+                    self.assertNotIn(None, ids)
+                    if explicit_pk:
+                        self.assertEqual(ids, [obj.pk for obj in objs])
+                    TwoFields.objects.all().delete()
+
+    @skipUnlessDBFeature('has_bulk_insert')
+    def test_batch_size_backend_limit_minimum_one(self):
+        for backend_limit in (0, -1):
+            for batch_size in (None, 10):
+                with self.subTest(backend_limit=backend_limit, batch_size=batch_size), transaction.atomic():
+                    objs = [Restaurant(name=str(i)) for i in range(2)]
+                    with mock.patch.object(connection.ops, 'bulk_batch_size', return_value=backend_limit):
+                        with self.assertNumQueries(2):
+                            Restaurant.objects.bulk_create(objs, batch_size=batch_size)
+                    self.assertSequenceEqual(
+                        Restaurant.objects.order_by('name').values_list('name', flat=True),
+                        ['0', '1'],
+                    )
+                    Restaurant.objects.all().delete()
+
+    @skipUnless(connection.vendor == 'sqlite', 'SQLite-specific batch limits')
+    @skipUnlessDBFeature('has_bulk_insert')
+    def test_explicit_batch_size_single_field_limit(self):
+        objs = [Restaurant(name=str(i)) for i in range(501)]
+        with self.assertNumQueries(2) as queries:
+            Restaurant.objects.bulk_create(objs, batch_size=501)
+        self.assertEqual([query['sql'].count('SELECT') for query in queries.captured_queries], [500, 1])
+        self.assertCountEqual(
+            Restaurant.objects.values_list('name', flat=True),
+            [obj.name for obj in objs],
+        )
+        self.assertEqual(Restaurant.objects.values('pk').distinct().count(), len(objs))
+
+    @skipUnless(connection.vendor == 'sqlite', 'SQLite-specific batch limits')
+    @skipUnlessDBFeature('has_bulk_insert')
+    def test_explicit_batch_size_multiple_fields_limit(self):
+        for explicit_count, generated_count, batch_sizes in (
+            (0, 500, [499, 1]),
+            (334, 0, [333, 1]),
+            (334, 500, [333, 1, 499, 1]),
+        ):
+            with self.subTest(explicit_count=explicit_count, generated_count=generated_count), transaction.atomic():
+                objs = [
+                    TwoFields(id=100000 + i if i < explicit_count else None, f1=i, f2=i + 1)
+                    for i in range(explicit_count + generated_count)
+                ]
+                with self.assertNumQueries(len(batch_sizes)) as queries:
+                    TwoFields.objects.bulk_create(objs, batch_size=len(objs))
+                self.assertEqual(
+                    [query['sql'].count('SELECT') for query in queries.captured_queries],
+                    batch_sizes,
+                )
+                self.assertSequenceEqual(
+                    TwoFields.objects.order_by('f1').values_list('f1', 'f2'),
+                    [(obj.f1, obj.f2) for obj in objs],
+                )
+                self.assertSequenceEqual(
+                    TwoFields.objects.filter(f1__lt=explicit_count).order_by('f1').values_list('pk', flat=True),
+                    [obj.pk for obj in objs[:explicit_count]],
+                )
+                self.assertEqual(TwoFields.objects.values('pk').distinct().count(), len(objs))
+                TwoFields.objects.all().delete()
 
     @skipUnlessDBFeature('has_bulk_insert')
     def test_bulk_insert_expressions(self):
