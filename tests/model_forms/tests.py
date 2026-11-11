@@ -759,6 +759,38 @@ class FieldOverridesByFormMetaForm(forms.ModelForm):
 
 
 class TestFieldOverridesByFormMeta(SimpleTestCase):
+    def test_error_messages_instance_isolation(self):
+        class CategoryForm(forms.ModelForm):
+            slug = forms.CharField(error_messages={
+                'required': 'Original required',
+                'custom': {'messages': ['Original']},
+            })
+
+            class Meta:
+                model = Category
+                fields = ('name', 'slug')
+                error_messages = {
+                    'name': {
+                        'required': 'Original required',
+                        'custom': {'messages': ['Original']},
+                    },
+                }
+
+        first = CategoryForm()
+        second = CategoryForm()
+        for name in ('name', 'slug'):
+            with self.subTest(field=name):
+                first.fields[name].error_messages['required'] = 'Changed required'
+                first.fields[name].error_messages['custom']['messages'].append('Changed')
+                for field in [second.fields[name], CategoryForm.base_fields[name], CategoryForm().fields[name]]:
+                    self.assertEqual(field.error_messages['required'], 'Original required')
+                    self.assertEqual(field.error_messages['custom'], {'messages': ['Original']})
+                    self.assertIsNot(field.error_messages, first.fields[name].error_messages)
+        self.assertEqual(CategoryForm._meta.error_messages['name'], {
+            'required': 'Original required',
+            'custom': {'messages': ['Original']},
+        })
+
     def test_widget_overrides(self):
         form = FieldOverridesByFormMetaForm()
         self.assertHTMLEqual(
