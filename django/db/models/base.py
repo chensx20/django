@@ -406,17 +406,22 @@ class ModelState:
 class Model(metaclass=ModelBase):
 
     def __init__(self, *args, **kwargs):
+        pre_init.send(sender=self.__class__, args=args, kwargs=kwargs)
+        self._state = ModelState()
+        self._state.loaded_fields = set()
+        self._state.initializing = True
+        try:
+            self._initialize(args, kwargs)
+        finally:
+            self._state.initializing = False
+        post_init.send(sender=self.__class__, instance=self)
+
+    def _initialize(self, args, kwargs):
         # Alias some things as locals to avoid repeat global lookups
         cls = self.__class__
         opts = self._meta
         _setattr = setattr
         _DEFERRED = DEFERRED
-
-        pre_init.send(sender=cls, args=args, kwargs=kwargs)
-
-        # Set up the storage for instance state
-        self._state = ModelState()
-        self._state.initializing = True
 
         # There is a rather weird disparity here; if kwargs, it's set, then args
         # overrides it. It should be one or the other; don't duplicate the work
@@ -503,8 +508,6 @@ class Model(metaclass=ModelBase):
             for kwarg in kwargs:
                 raise TypeError("%s() got an unexpected keyword argument '%s'" % (cls.__name__, kwarg))
         super().__init__()
-        self._state.initializing = False
-        post_init.send(sender=cls, instance=self)
 
     @classmethod
     def from_db(cls, db, field_names, values):
@@ -593,18 +596,29 @@ class Model(metaclass=ModelBase):
         """Clear the concrete inheritance identity without loading relations."""
         models = [self._meta.concrete_model]
         seen = set()
+        fields = {}
+        cached_parents = []
         while models:
             model = models.pop()
             if model in seen:
                 continue
             seen.add(model)
-            self._set_field_value(model._meta.pk, None)
+            fields[model._meta.pk] = None
             for parent, link in model._meta.parents.items():
                 models.append(parent._meta.concrete_model)
                 if link:
-                    self._set_field_value(link, None)
+                    fields[link] = None
                     if link.is_cached(self):
-                        link.delete_cached_value(self)
+                        cached_parents.append((link, link.get_cached_value(self)))
+        for link, parent in cached_parents:
+            relation = link.remote_field
+            if parent is not None and relation.is_cached(parent) and relation.get_cached_value(parent) is self:
+                relation.delete_cached_value(parent)
+        for field in fields:
+            self._set_field_value(field, None)
+        for link, parent in cached_parents:
+            if link.is_cached(self):
+                link.delete_cached_value(self)
         for relation in self._meta.related_objects:
             if relation.is_cached(self):
                 relation.delete_cached_value(self)
@@ -617,7 +631,7 @@ class Model(metaclass=ModelBase):
         """
         return {
             f.attname for f in self._meta.concrete_fields
-            if f.attname not in self.__dict__
+            if f.attname not in self.__dict__ and f.attname not in self._state.loaded_fields
         }
 
     def refresh_from_db(self, using=None, fields=None):
@@ -772,7 +786,7 @@ class Model(metaclass=ModelBase):
 
         # If saving to the same database, and this model is deferred, then
         # automatically do an "update_fields" save on the loaded fields.
-        elif not force_insert and deferred_fields and using == self._state.db:
+        elif not force_insert and deferred_fields and using == self._state.db and self.pk is not None:
             field_names = set()
             for field in self._meta.concrete_fields:
                 if not field.primary_key and not hasattr(field, 'through'):

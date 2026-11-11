@@ -2,8 +2,9 @@
 Regression tests for Model inheritance behavior.
 """
 import datetime
+from contextlib import ExitStack
 from operator import attrgetter
-from unittest import expectedFailure
+from unittest import expectedFailure, mock
 
 from django import forms
 from django.test import TestCase
@@ -20,6 +21,97 @@ from .models import (
 
 
 class IdentityResetTests(TestCase):
+    def test_unique_identity_field_writes(self):
+        cases = (
+            (Derived, {'f': True}),
+            (DeepDerived, {'f': True}),
+            (DerivedProxy, {'f': True}),
+            (DiamondLeaf, {'f': True}),
+            (IndependentUUIDDerived, {'f': True}),
+            (ParkingLot3, {'name': 'Original', 'address': 'Address'}),
+            (Senator, {'name': 'Original', 'title': 'Senator', 'state': 'CA'}),
+        )
+        for model, values in cases:
+            for name in ('pk', model._meta.get_parent_list()[-1]._meta.pk.attname):
+                with self.subTest(model=model, name=name):
+                    original = model.objects.create(**values)
+                    child = model.objects.get(pk=original.pk)
+                    ancestors = [model._meta.concrete_model, *model._meta.get_parent_list()]
+                    fields = set()
+                    counts = {}
+                    for ancestor in ancestors:
+                        fields.add(ancestor._meta.pk)
+                        fields.update(link for link in ancestor._meta.parents.values() if link is not None)
+                        counts[ancestor] = ancestor.objects.count()
+                    with ExitStack() as stack:
+                        writers = {
+                            field: stack.enter_context(mock.patch.object(
+                                field.descriptor_access, 'write', wraps=field.descriptor_access.write,
+                            ))
+                            for field in fields
+                        }
+                        with self.assertNumQueries(0):
+                            setattr(child, name, None)
+                        for field, write in writers.items():
+                            write.assert_called_once_with(child, None)
+                            self.assertIsNone(getattr(child, field.attname))
+                    child.save()
+                    for ancestor, count in counts.items():
+                        self.assertEqual(ancestor.objects.count(), count + 1)
+                    self.assertNotEqual(child.pk, original.pk)
+                    for ancestor in ancestors:
+                        for parent, link in ancestor._meta.parents.items():
+                            if link is not None:
+                                self.assertEqual(getattr(child, link.attname), child._get_pk_val(parent._meta))
+                    original.refresh_from_db()
+                    for field_name, value in values.items():
+                        self.assertEqual(getattr(original, field_name), value)
+
+    def test_cached_counterpart_resolves_original_child(self):
+        for name in ('uid', 'pk'):
+            with self.subTest(name=name):
+                original = DeepDerived.objects.create(f=True)
+                ancestor = Item.objects.get(pk=original.pk)
+                parent = ancestor.derived
+                child = parent.deepderived
+                with self.assertNumQueries(0):
+                    self.assertIs(child.derived_ptr, parent)
+                    self.assertIs(parent.item_ptr, ancestor)
+                # Also cache the grandparent on this instance.
+                child._meta.get_field('item_ptr').set_cached_value(child, ancestor)
+                child._prefetched_objects_cache = {'derived_ptr': parent}
+                with self.assertNumQueries(0):
+                    setattr(child, name, None)
+                self.assertIs(DeepDerived._meta.pk.remote_field.is_cached(parent), False)
+                self.assertEqual(child._prefetched_objects_cache, {})
+                self.assertEqual(parent.pk, original.pk)
+                self.assertEqual(ancestor.pk, original.pk)
+                self.assertIs(parent.f, True)
+                self.assertIs(ancestor.f, True)
+                # The ancestor's cached Derived is unrelated to the reset child.
+                with self.assertNumQueries(0):
+                    self.assertIs(ancestor.derived, parent)
+                child.f = False
+                child.save()
+                with self.assertNumQueries(1):
+                    old_child = parent.deepderived
+                self.assertEqual(old_child.pk, original.pk)
+                self.assertIs(old_child.f, True)
+                self.assertIsNot(old_child, child)
+
+    def test_unrelated_cached_counterpart_is_preserved(self):
+        original = Derived.objects.create(f=True)
+        parent = Item.objects.get(pk=original.pk)
+        cached_child = parent.derived
+        other_child = Derived.objects.get(pk=original.pk)
+        link = Derived._meta.pk
+        link.set_cached_value(other_child, parent)
+        with self.assertNumQueries(0):
+            other_child.uid = None
+            self.assertIs(parent.derived, cached_child)
+        self.assertEqual(parent.pk, original.pk)
+        self.assertEqual(cached_child.pk, original.pk)
+
     def test_named_primary_key_reverse_accessor(self):
         original = Derived.objects.create(f=True)
         parent = Item.objects.get(pk=original.pk)

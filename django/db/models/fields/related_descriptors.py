@@ -74,15 +74,9 @@ from django.utils.functional import cached_property
 
 class ForeignKeyDeferredAttribute(DeferredAttribute):
     def __set__(self, instance, value):
-        if (
-            self.field.primary_key and value is None and
-            not (instance._state.initializing or instance._state.setting_field)
-        ):
-            instance._reset_identity()
-        else:
-            if instance.__dict__.get(self.field.attname) != value and self.field.is_cached(instance):
-                self.field.delete_cached_value(instance)
-            instance.__dict__[self.field.attname] = value
+        if instance.__dict__.get(self.field.attname) != value and self.field.is_cached(instance):
+            self.field.delete_cached_value(instance)
+        instance.__dict__[self.field.attname] = value
 
 
 class ForwardManyToOneDescriptor:
