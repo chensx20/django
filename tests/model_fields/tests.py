@@ -4,6 +4,7 @@ from django import forms
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.test import SimpleTestCase, TestCase
+from django.test.utils import isolate_apps
 from django.utils.functional import lazy
 
 from .models import (
@@ -148,7 +149,156 @@ class ChoicesTests(SimpleTestCase):
                 self.assertIsInstance(field.formfield(), forms.ChoiceField)
 
 
+@isolate_apps('model_fields')
 class GetFieldDisplayTests(SimpleTestCase):
+
+    def test_overridden_display(self):
+        class Foo(models.Model):
+            foo_bar = models.CharField(choices=[(1, 'foo'), (2, 'bar')])
+
+            def __str__(self):
+                return self.get_foo_bar_display()
+
+            def get_foo_bar_display(self):
+                return 'something'
+
+        instance = Foo(foo_bar=1)
+        with self.subTest(display='method'):
+            self.assertEqual(instance.get_foo_bar_display(), 'something')
+        with self.subTest(display='str'):
+            self.assertEqual(str(instance), 'something')
+
+    def test_overridden_display_before_field(self):
+        class Foo(models.Model):
+            def get_foo_bar_display(self):
+                return 'something'
+
+            foo_bar = models.CharField(choices=[(1, 'foo'), (2, 'bar')])
+
+        self.assertEqual(Foo(foo_bar=1).get_foo_bar_display(), 'something')
+
+    def test_overridden_display_abstract_field(self):
+        class AbstractFoo(models.Model):
+            foo_bar = models.CharField(choices=[(1, 'foo'), (2, 'bar')])
+
+            class Meta:
+                abstract = True
+
+        class Foo(AbstractFoo):
+            def get_foo_bar_display(self):
+                return 'something'
+
+        self.assertEqual(Foo(foo_bar=1).get_foo_bar_display(), 'something')
+        self.assertEqual(AbstractFoo(foo_bar=1).get_foo_bar_display(), 'foo')
+
+    def test_redefined_abstract_field_choices(self):
+        class AbstractFoo(models.Model):
+            foo_bar = models.CharField(choices=[(1, 'foo'), (2, 'bar')])
+
+            class Meta:
+                abstract = True
+
+        class Foo(AbstractFoo):
+            foo_bar = models.CharField(choices=[(1, 'changed'), (2, 'bar'), (3, 'baz')])
+
+        self.assertEqual(Foo(foo_bar=1).get_foo_bar_display(), 'changed')
+        self.assertEqual(Foo(foo_bar=3).get_foo_bar_display(), 'baz')
+        self.assertEqual(AbstractFoo(foo_bar=1).get_foo_bar_display(), 'foo')
+        self.assertEqual(AbstractFoo(foo_bar=3).get_foo_bar_display(), 3)
+
+    def test_inherited_display_does_not_prevent_generation(self):
+        class AbstractFoo(models.Model):
+            foo_bar = models.CharField(choices=[(1, 'foo'), (2, 'bar')])
+
+            def get_foo_bar_display(self):
+                return 'something'
+
+            class Meta:
+                abstract = True
+
+        class Foo(AbstractFoo):
+            pass
+
+        class RedefinedFoo(AbstractFoo):
+            foo_bar = models.CharField(choices=[(1, 'changed')])
+
+        self.assertEqual(AbstractFoo(foo_bar=1).get_foo_bar_display(), 'something')
+        self.assertEqual(Foo(foo_bar=1).get_foo_bar_display(), 'foo')
+        self.assertEqual(RedefinedFoo(foo_bar=1).get_foo_bar_display(), 'changed')
+
+    def test_inherited_display_without_field_contribution(self):
+        class Foo(models.Model):
+            foo_bar = models.CharField(choices=[(1, 'foo'), (2, 'bar')])
+
+            def get_foo_bar_display(self):
+                return 'something'
+
+        class Child(Foo):
+            pass
+
+        class Proxy(Foo):
+            class Meta:
+                proxy = True
+
+        class OverriddenChild(Foo):
+            def get_foo_bar_display(self):
+                return 'child'
+
+        class OverriddenProxy(Foo):
+            def get_foo_bar_display(self):
+                return 'proxy'
+
+            class Meta:
+                proxy = True
+
+        for model, expected in (
+            (Child, 'something'), (Proxy, 'something'),
+            (OverriddenChild, 'child'), (OverriddenProxy, 'proxy'),
+        ):
+            with self.subTest(model=model):
+                self.assertEqual(model(foo_bar=1).get_foo_bar_display(), expected)
+
+    def test_inherited_generated_display(self):
+        class Foo(models.Model):
+            foo_bar = models.CharField(choices=[(1, 'foo'), (2, 'bar')])
+
+        class Child(Foo):
+            pass
+
+        class Proxy(Foo):
+            class Meta:
+                proxy = True
+
+        for model in (Child, Proxy):
+            with self.subTest(model=model):
+                self.assertEqual(model(foo_bar=1).get_foo_bar_display(), 'foo')
+                self.assertNotIn('get_foo_bar_display', model.__dict__)
+
+    def test_overridden_get_FIELD_display(self):
+        class Foo(models.Model):
+            foo_bar = models.CharField(choices=[(1, 'foo'), (2, 'bar')])
+
+            def _get_FIELD_display(self, field):
+                return 'custom %s' % super()._get_FIELD_display(field)
+
+        self.assertEqual(Foo(foo_bar=1).get_foo_bar_display(), 'custom foo')
+
+    def test_empty_choices_display(self):
+        class Foo(models.Model):
+            foo_bar = models.CharField(choices=[])
+
+        self.assertEqual(Foo(foo_bar='unknown').get_foo_bar_display(), 'unknown')
+
+    def test_overridden_display_explicit_field_name(self):
+        class Foo(models.Model):
+            field = models.CharField(name='foo_bar', choices=[(1, 'foo')])
+
+            def get_foo_bar_display(self):
+                return 'something'
+
+        instance = Foo(foo_bar=1)
+        self.assertEqual(instance.get_foo_bar_display(), 'something')
+        self.assertFalse(hasattr(instance, 'get_field_display'))
 
     def test_choices_and_field_display(self):
         """
