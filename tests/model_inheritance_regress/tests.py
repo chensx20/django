@@ -2,19 +2,423 @@
 Regression tests for Model inheritance behavior.
 """
 import datetime
+from contextlib import ExitStack
 from operator import attrgetter
-from unittest import expectedFailure
+from unittest import expectedFailure, mock
 
 from django import forms
 from django.test import TestCase
 
 from .models import (
     ArticleWithAuthor, BachelorParty, BirthdayParty, BusStation, Child,
-    DerivedM, InternalCertificationAudit, ItalianRestaurant, M2MChild,
-    MessyBachelorParty, ParkingLot, ParkingLot3, ParkingLot4A, ParkingLot4B,
-    Person, Place, Profile, QualityControl, Restaurant, SelfRefChild,
-    SelfRefParent, Senator, Supplier, TrainStation, User, Wholesaler,
+    DeepDerived, Derived, DerivedM, DerivedProxy, DiamondLeaf, DiamondLeft,
+    DiamondRight, IndependentUUIDDerived, InternalCertificationAudit,
+    ItalianRestaurant, Item, M2MChild, MessyBachelorParty, ParkingLot,
+    ParkingLot3, ParkingLot4A, ParkingLot4B, Person, Place, Profile,
+    QualityControl, Restaurant, SelfRefChild, SelfRefParent, Senator, Supplier,
+    TrainStation, User, UUIDDerived, UUIDItem, Wholesaler,
 )
+
+
+class IdentityResetTests(TestCase):
+    def test_unique_identity_field_writes(self):
+        cases = (
+            (Derived, {'f': True}),
+            (DeepDerived, {'f': True}),
+            (DerivedProxy, {'f': True}),
+            (DiamondLeaf, {'f': True}),
+            (IndependentUUIDDerived, {'f': True}),
+            (ParkingLot3, {'name': 'Original', 'address': 'Address'}),
+            (Senator, {'name': 'Original', 'title': 'Senator', 'state': 'CA'}),
+        )
+        for model, values in cases:
+            for name in ('pk', model._meta.get_parent_list()[-1]._meta.pk.attname):
+                with self.subTest(model=model, name=name):
+                    original = model.objects.create(**values)
+                    child = model.objects.get(pk=original.pk)
+                    ancestors = [model._meta.concrete_model, *model._meta.get_parent_list()]
+                    fields = set()
+                    counts = {}
+                    for ancestor in ancestors:
+                        fields.add(ancestor._meta.pk)
+                        fields.update(link for link in ancestor._meta.parents.values() if link is not None)
+                        counts[ancestor] = ancestor.objects.count()
+                    with ExitStack() as stack:
+                        writers = {
+                            field: stack.enter_context(mock.patch.object(
+                                field.descriptor_access, 'write', wraps=field.descriptor_access.write,
+                            ))
+                            for field in fields
+                        }
+                        with self.assertNumQueries(0):
+                            setattr(child, name, None)
+                        for field, write in writers.items():
+                            write.assert_called_once_with(child, None)
+                            self.assertIsNone(getattr(child, field.attname))
+                    child.save()
+                    for ancestor, count in counts.items():
+                        self.assertEqual(ancestor.objects.count(), count + 1)
+                    self.assertNotEqual(child.pk, original.pk)
+                    for ancestor in ancestors:
+                        for parent, link in ancestor._meta.parents.items():
+                            if link is not None:
+                                self.assertEqual(getattr(child, link.attname), child._get_pk_val(parent._meta))
+                    original.refresh_from_db()
+                    for field_name, value in values.items():
+                        self.assertEqual(getattr(original, field_name), value)
+
+    def test_cached_counterpart_resolves_original_child(self):
+        for name in ('uid', 'pk'):
+            with self.subTest(name=name):
+                original = DeepDerived.objects.create(f=True)
+                ancestor = Item.objects.get(pk=original.pk)
+                parent = ancestor.derived
+                child = parent.deepderived
+                with self.assertNumQueries(0):
+                    self.assertIs(child.derived_ptr, parent)
+                    self.assertIs(parent.item_ptr, ancestor)
+                # Also cache the grandparent on this instance.
+                child._meta.get_field('item_ptr').set_cached_value(child, ancestor)
+                child._prefetched_objects_cache = {'derived_ptr': parent}
+                with self.assertNumQueries(0):
+                    setattr(child, name, None)
+                self.assertIs(DeepDerived._meta.pk.remote_field.is_cached(parent), False)
+                self.assertEqual(child._prefetched_objects_cache, {})
+                self.assertEqual(parent.pk, original.pk)
+                self.assertEqual(ancestor.pk, original.pk)
+                self.assertIs(parent.f, True)
+                self.assertIs(ancestor.f, True)
+                # The ancestor's cached Derived is unrelated to the reset child.
+                with self.assertNumQueries(0):
+                    self.assertIs(ancestor.derived, parent)
+                child.f = False
+                child.save()
+                with self.assertNumQueries(1):
+                    old_child = parent.deepderived
+                self.assertEqual(old_child.pk, original.pk)
+                self.assertIs(old_child.f, True)
+                self.assertIsNot(old_child, child)
+
+    def test_unrelated_cached_counterpart_is_preserved(self):
+        original = Derived.objects.create(f=True)
+        parent = Item.objects.get(pk=original.pk)
+        cached_child = parent.derived
+        other_child = Derived.objects.get(pk=original.pk)
+        link = Derived._meta.pk
+        link.set_cached_value(other_child, parent)
+        with self.assertNumQueries(0):
+            other_child.uid = None
+            self.assertIs(parent.derived, cached_child)
+        self.assertEqual(parent.pk, original.pk)
+        self.assertEqual(cached_child.pk, original.pk)
+
+    def test_named_primary_key_reverse_accessor(self):
+        original = Derived.objects.create(f=True)
+        parent = Item.objects.get(pk=original.pk)
+        derived = parent.derived
+        with self.assertNumQueries(0):
+            derived.uid = None
+            derived.f = False
+        derived.save()
+        self.assertNotEqual(derived.pk, original.pk)
+        self.assertEqual(derived.uid, derived.item_ptr_id)
+        self.assertIs(Item.objects.get(pk=original.pk).f, True)
+        self.assertIs(Item.objects.get(pk=derived.pk).f, False)
+        self.assertEqual(Item.objects.count(), 2)
+        self.assertEqual(Derived.objects.count(), 2)
+        self.assertEqual(parent.pk, original.pk)
+        self.assertIs(parent.f, True)
+
+    def test_named_primary_key_direct_retrieval(self):
+        original = Derived.objects.create(f=True)
+        derived = Derived.objects.get(pk=original.pk)
+        derived.uid = None
+        derived.f = False
+        derived.save()
+        self.assertNotEqual(derived.pk, original.pk)
+        original.refresh_from_db()
+        self.assertIs(original.f, True)
+        self.assertEqual(Derived.objects.count(), 2)
+
+    def test_primary_key_alias_and_parent_link_id(self):
+        for name in ('pk', 'item_ptr_id'):
+            with self.subTest(name=name):
+                original = Derived.objects.create(f=True)
+                derived = Derived.objects.get(pk=original.pk)
+                with self.assertNumQueries(0):
+                    setattr(derived, name, None)
+                    self.assertIsNone(derived.uid)
+                    self.assertIsNone(derived.item_ptr_id)
+                derived.f = False
+                derived.save()
+                self.assertNotEqual(derived.pk, original.pk)
+                original.refresh_from_db()
+                self.assertIs(original.f, True)
+
+    def test_reset_before_first_save(self):
+        parent = Item.objects.create(f=True)
+        derived = Derived(item_ptr_id=parent.pk, f=False)
+        derived.uid = None
+        derived.save()
+        self.assertNotEqual(derived.pk, parent.pk)
+        parent.refresh_from_db()
+        self.assertIs(parent.f, True)
+
+    def test_initialization_preserves_parent_link(self):
+        parent = Item.objects.create(f=True)
+        for kwargs in ({'item_ptr_id': parent.pk}, {'item_ptr': parent}):
+            with self.subTest(kwargs=kwargs):
+                derived = Derived(**kwargs)
+                derived.save()
+                self.assertEqual(derived.uid, parent.pk)
+                self.assertEqual(derived.pk, parent.pk)
+        self.assertEqual(Item.objects.count(), 1)
+
+    def test_ordinary_update_and_refresh(self):
+        derived = Derived.objects.create(f=True)
+        pk = derived.pk
+        derived.f = False
+        derived.save()
+        derived.refresh_from_db()
+        self.assertEqual(derived.pk, pk)
+        self.assertIs(derived.f, False)
+        self.assertEqual(Item.objects.count(), 1)
+
+    def test_uuid_default(self):
+        for name in ('pk', 'uuid'):
+            with self.subTest(name=name):
+                original = UUIDDerived.objects.create(f=True)
+                derived = UUIDDerived.objects.get(pk=original.pk)
+                setattr(derived, name, None)
+                derived.f = False
+                derived.save()
+                self.assertNotEqual(derived.pk, original.pk)
+                self.assertEqual(derived.uuid, derived.uuiditem_ptr_id)
+                original.refresh_from_db()
+                self.assertIs(original.f, True)
+        self.assertEqual(UUIDItem.objects.count(), 4)
+        self.assertEqual(UUIDDerived.objects.count(), 4)
+
+    def test_independent_uuid_defaults(self):
+        original = IndependentUUIDDerived.objects.create(f=True)
+        derived = IndependentUUIDDerived.objects.get(pk=original.pk)
+        derived.uuid = None
+        self.assertIsNone(derived.child_id)
+        self.assertIsNone(derived.uuiditem_ptr_id)
+        derived.f = False
+        derived.save()
+        self.assertNotEqual(derived.pk, original.pk)
+        self.assertNotEqual(derived.uuid, original.uuid)
+        original.refresh_from_db()
+        self.assertIs(original.f, True)
+        self.assertEqual(IndependentUUIDDerived.objects.count(), 2)
+
+    def test_deep_inheritance(self):
+        for name in ('pk', 'uid', 'item_ptr_id', 'derived_ptr_id'):
+            with self.subTest(name=name):
+                original = DeepDerived.objects.create(f=True)
+                derived = DeepDerived.objects.get(pk=original.pk)
+                with self.assertNumQueries(0):
+                    setattr(derived, name, None)
+                    self.assertIsNone(derived.uid)
+                    self.assertIsNone(derived.item_ptr_id)
+                    self.assertIsNone(derived.derived_ptr_id)
+                derived.f = False
+                derived.save()
+                self.assertNotEqual(derived.pk, original.pk)
+                original.refresh_from_db()
+                self.assertIs(original.f, True)
+        self.assertEqual(Item.objects.count(), 8)
+        self.assertEqual(Derived.objects.count(), 8)
+        self.assertEqual(DeepDerived.objects.count(), 8)
+
+    def test_multiple_inheritance(self):
+        original = Senator.objects.create(name='Original', title='Senator', state='CA')
+        senator = Senator.objects.get(pk=original.pk)
+        with self.assertNumQueries(0):
+            senator.politician_id = None
+            for name in ('id', 'person_ptr_id', 'politician_id', 'politician_ptr_id', 'congressman_ptr_id'):
+                self.assertIsNone(getattr(senator, name))
+        senator.name = 'Copy'
+        senator.save()
+        self.assertNotEqual(senator.pk, original.pk)
+        self.assertNotEqual(senator.politician_id, original.politician_id)
+        original.refresh_from_db()
+        self.assertEqual(original.name, 'Original')
+        self.assertEqual(Person.objects.count(), 2)
+        self.assertEqual(Senator.objects.count(), 2)
+
+    def test_diamond_inheritance(self):
+        original = DiamondLeaf.objects.create(f=True)
+        leaf = DiamondLeaf.objects.get(pk=original.pk)
+        with self.assertNumQueries(0):
+            leaf.uid = None
+            for name in ('uid', 'item_ptr_id', 'item_link_id', 'diamondleft_ptr_id', 'diamondright_ptr_id'):
+                self.assertIsNone(getattr(leaf, name))
+        leaf.f = False
+        leaf.save()
+        self.assertNotEqual(leaf.pk, original.pk)
+        original.refresh_from_db()
+        self.assertIs(original.f, True)
+        for model in (Item, DiamondLeft, DiamondRight, DiamondLeaf):
+            self.assertEqual(model.objects.count(), 2)
+
+    def test_independent_child_primary_key(self):
+        for name in ('pk', 'id', 'primary_key'):
+            with self.subTest(name=name):
+                original = ParkingLot3.objects.create(name='Original', address='Address')
+                lot = ParkingLot3.objects.get(pk=original.pk)
+                with self.assertNumQueries(0):
+                    setattr(lot, name, None)
+                    self.assertIsNone(lot.id)
+                    self.assertIsNone(lot.primary_key)
+                    self.assertIsNone(lot.parent_id)
+                lot.name = 'Copy'
+                lot.save()
+                self.assertNotEqual(lot.pk, original.pk)
+                self.assertNotEqual(lot.parent_id, original.parent_id)
+                original.refresh_from_db()
+                self.assertEqual(original.name, 'Original')
+        self.assertEqual(Place.objects.count(), 6)
+        self.assertEqual(ParkingLot3.objects.count(), 6)
+
+    def test_non_null_assignment_preserves_independent_identity(self):
+        lot = ParkingLot3.objects.create(name='Original', address='Address')
+        parent_id = lot.parent_id
+        new_pk = lot.pk + 10
+        lot.primary_key = new_pk
+        self.assertEqual(lot.parent_id, parent_id)
+        self.assertEqual(lot.id, parent_id)
+        lot.id = parent_id + 1
+        self.assertEqual(lot.parent_id, parent_id)
+        self.assertEqual(lot.primary_key, new_pk)
+
+    def test_proxy(self):
+        original = DerivedProxy.objects.create(f=True)
+        proxy = DerivedProxy.objects.get(pk=original.pk)
+        proxy.uid = None
+        proxy.f = False
+        proxy.save()
+        self.assertNotEqual(proxy.pk, original.pk)
+        original.refresh_from_db()
+        self.assertIs(original.f, True)
+        self.assertEqual(Derived.objects.count(), 2)
+
+    def test_cached_parents_are_not_mutated(self):
+        derived = DeepDerived.objects.create(f=True)
+        parent = derived.derived_ptr
+        ancestor = derived.item_ptr
+        parent_pk, ancestor_pk = parent.pk, ancestor.pk
+        with self.assertNumQueries(0):
+            derived.uid = None
+        self.assertEqual(parent.pk, parent_pk)
+        self.assertEqual(ancestor.pk, ancestor_pk)
+        for name in ('derived_ptr', 'item_ptr'):
+            self.assertIs(derived._meta.get_field(name).is_cached(derived), False)
+        derived.save()
+        self.assertNotEqual(derived.pk, parent_pk)
+
+    def test_reverse_and_prefetch_caches_are_cleared(self):
+        parent = Item.objects.create(f=True)
+        Derived(item_ptr=parent).save_base(raw=True)
+        parent = Item.objects.select_related('derived').get(pk=parent.pk)
+        child = parent.derived
+        parent._prefetched_objects_cache = {'derived': child}
+        with self.assertNumQueries(0):
+            parent.uid = None
+        self.assertEqual(parent._state.fields_cache, {})
+        self.assertEqual(parent._prefetched_objects_cache, {})
+        self.assertIsNotNone(child.pk)
+
+    def test_unrelated_forward_relation_is_preserved(self):
+        parent = SelfRefParent.objects.create(parent_data=1)
+        child = SelfRefChild.objects.create(parent_data=2, child_data=3, self_data=parent)
+        child.pk = None
+        self.assertEqual(child.self_data_id, parent.pk)
+        with self.assertNumQueries(0):
+            self.assertEqual(child.self_data, parent)
+        child.save()
+        self.assertEqual(SelfRefChild.objects.count(), 2)
+
+    def test_deferred_identity_reset_does_not_query(self):
+        original = DeepDerived.objects.create(f=True)
+        for name in ('pk', 'uid', 'item_ptr_id'):
+            with self.subTest(name=name):
+                derived = DeepDerived.objects.only('derived_ptr').get(pk=original.pk)
+                self.assertIn('f', derived.get_deferred_fields())
+                with self.assertNumQueries(0):
+                    setattr(derived, name, None)
+                    self.assertIsNone(derived.uid)
+                    self.assertIsNone(derived.item_ptr_id)
+                    self.assertIsNone(derived.pk)
+                self.assertIn('f', derived.get_deferred_fields())
+
+    def test_deferred_reads_and_refresh(self):
+        original = Derived.objects.create(f=True)
+        derived = Derived.objects.only('item_ptr').get(pk=original.pk)
+        with self.assertNumQueries(0):
+            self.assertEqual(derived.uid, original.pk)
+        with self.assertNumQueries(1):
+            self.assertIs(derived.f, True)
+        derived.refresh_from_db()
+        self.assertEqual(derived.uid, original.pk)
+
+    def test_delete_keep_parents(self):
+        derived = Derived.objects.create(f=True)
+        pk = derived.pk
+        derived.delete(keep_parents=True)
+        self.assertIsNone(derived.pk)
+        self.assertEqual(derived.uid, pk)
+        self.assertIs(Item.objects.get(pk=pk).f, True)
+
+    def test_delete(self):
+        derived = Derived.objects.create(f=True)
+        derived.delete()
+        self.assertIsNone(derived.pk)
+        self.assertEqual(Item.objects.count(), 0)
+
+    def test_parent_object_assignment_is_not_a_reset(self):
+        lot = ParkingLot3.objects.create(name='Original', address='Address')
+        pk = lot.pk
+        lot.parent = None
+        self.assertEqual(lot.pk, pk)
+        replacement = Place.objects.create(name='Replacement', address='Address')
+        lot.parent = replacement
+        self.assertEqual(lot.pk, pk)
+        self.assertEqual(lot.parent_id, replacement.pk)
+
+    def test_primary_parent_object_assignment_synchronizes(self):
+        original = Derived.objects.create(f=True)
+        replacement = Item.objects.create(f=False)
+        original.item_ptr = replacement
+        self.assertEqual(original.uid, replacement.pk)
+        self.assertEqual(original.pk, replacement.pk)
+        original.save()
+        self.assertEqual(Item.objects.count(), 2)
+        self.assertEqual(Derived.objects.count(), 2)
+
+    def test_raw_save_preserves_existing_parent(self):
+        parent = Item.objects.create(f=True)
+        derived = Derived(item_ptr_id=parent.pk)
+        derived.save_base(raw=True)
+        self.assertIsNone(derived.uid)
+        self.assertEqual(derived.pk, parent.pk)
+        self.assertIs(Item.objects.get(pk=parent.pk).f, True)
+        self.assertEqual(Item.objects.count(), 1)
+
+    def test_forced_updates_rejected_after_reset(self):
+        original = Derived.objects.create(f=True)
+        for kwargs in ({'force_update': True}, {'update_fields': ['f']}):
+            with self.subTest(kwargs=kwargs):
+                derived = Derived.objects.get(pk=original.pk)
+                derived.uid = None
+                derived.f = False
+                with self.assertRaisesMessage(ValueError, 'Cannot force an update in save() with no primary key.'):
+                    derived.save(**kwargs)
+                original.refresh_from_db()
+                self.assertIs(original.f, True)
+                self.assertEqual(Item.objects.count(), 1)
+                self.assertEqual(Derived.objects.count(), 1)
 
 
 class ModelInheritanceTest(TestCase):

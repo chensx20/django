@@ -14,7 +14,9 @@ from django.conf import settings
 from django.core import checks, exceptions, validators
 from django.db import connection, connections, router
 from django.db.models.constants import LOOKUP_SEP
-from django.db.models.query_utils import DeferredAttribute, RegisterLookupMixin
+from django.db.models.query_utils import (
+    DeferredAttribute, RegisterLookupMixin, field_attribute,
+)
 from django.utils import timezone
 from django.utils.datastructures import DictWrapper
 from django.utils.dateparse import (
@@ -762,7 +764,7 @@ class Field(RegisterLookupMixin):
             # if you have a classmethod and a field with the same name, then
             # such fields can't be deferred (we don't have a check for this).
             if not getattr(cls, self.attname, None):
-                setattr(cls, self.attname, self.descriptor_class(self))
+                setattr(cls, self.attname, field_attribute(self))
         if self.choices is not None:
             if not hasattr(cls, 'get_%s_display' % self.name):
                 setattr(

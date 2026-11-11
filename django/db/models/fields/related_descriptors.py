@@ -249,12 +249,12 @@ class ForwardManyToOneDescriptor:
                 remote_field.set_cached_value(related, None)
 
             for lh_field, rh_field in self.field.related_fields:
-                setattr(instance, lh_field.attname, None)
+                instance._set_field_value(lh_field, None)
 
         # Set the values of the related field.
         else:
             for lh_field, rh_field in self.field.related_fields:
-                setattr(instance, lh_field.attname, getattr(value, rh_field.attname))
+                instance._set_field_value(lh_field, getattr(value, rh_field.attname))
 
         # Set the related instance cache used by __get__ to avoid an SQL query
         # when accessing the attribute we just set.
@@ -320,7 +320,7 @@ class ForwardOneToOneDescriptor(ForwardManyToOneDescriptor):
             for field in inherited_pk_fields:
                 rel_model_pk_name = field.remote_field.model._meta.pk.attname
                 raw_value = getattr(value, rel_model_pk_name) if value is not None else None
-                setattr(instance, rel_model_pk_name, raw_value)
+                instance._set_field_value(field.remote_field.model._meta.pk, raw_value)
 
 
 class ReverseOneToOneDescriptor:
@@ -476,7 +476,7 @@ class ReverseOneToOneDescriptor:
             related_pk = tuple(getattr(instance, field.attname) for field in self.related.field.foreign_related_fields)
             # Set the value of the related field to the value of the related object's related field
             for index, field in enumerate(self.related.field.local_related_fields):
-                setattr(value, field.attname, related_pk[index])
+                value._set_field_value(field, related_pk[index])
 
             # Set the related instance cache used by __get__ to avoid an SQL query
             # when accessing the attribute we just set.

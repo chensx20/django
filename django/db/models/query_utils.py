@@ -164,6 +164,118 @@ class DeferredAttribute:
         return None
 
 
+class FieldDescriptorAccess:
+    def __init__(self, descriptor, read, write):
+        self.descriptor = descriptor
+        self.read = read
+        self.write = write
+
+
+class NonDataFieldAccess:
+    """Preserve instance-dictionary precedence for non-data descriptors."""
+    def __init__(self, field, descriptor, read):
+        self.field = field
+        self.descriptor = descriptor
+        self.descriptor_read = read
+
+    def read(self, instance, owner):
+        if instance is not None and self.field.attname in instance.__dict__:
+            return instance.__dict__[self.field.attname]
+        return self.descriptor_read(instance, owner)
+
+    def write(self, instance, value):
+        instance.__dict__[self.field.attname] = value
+
+    def delete(self, instance):
+        try:
+            del instance.__dict__[self.field.attname]
+        except KeyError:
+            raise AttributeError(self.field.attname) from None
+
+
+class DeleteOnlyFieldAccess:
+    def __init__(self, descriptor, read):
+        self.descriptor = descriptor
+        self.read = read
+
+    def write(self, instance, value):
+        raise AttributeError('__set__')
+
+
+class FieldAttribute:
+    def __init__(self, field, access):
+        self.field = field
+        self.access = access
+
+    def __get__(self, instance, owner=None):
+        return self.access.read(instance, owner)
+
+    def __set__(self, instance, value):
+        if (
+            self.field.primary_key and value is None and
+            not (instance._state.initializing or instance._state.setting_field)
+        ):
+            instance._reset_identity()
+        else:
+            self.access.write(instance, value)
+            if self.field.attname not in instance.__dict__:
+                instance._state.loaded_fields.add(self.field.attname)
+            else:
+                instance._state.loaded_fields.discard(self.field.attname)
+
+
+class DeletableFieldAttribute(FieldAttribute):
+    def __init__(self, field, access, delete):
+        super().__init__(field, access)
+        self.delete = delete
+
+    def __delete__(self, instance):
+        self.delete(instance)
+        instance._state.loaded_fields.discard(self.field.attname)
+
+
+def bind_field_descriptor_method(descriptor, method):
+    """Apply special-method binding without consulting instance attributes."""
+    for cls in inspect.getmro(type(method)):
+        if '__get__' in cls.__dict__:
+            return cls.__dict__['__get__'](method, descriptor, type(descriptor))
+    return method
+
+
+def field_attribute(field):
+    """Normalize Python's descriptor protocol once, at field contribution."""
+    descriptor = field.descriptor_class(field)
+    protocol = {}
+    for cls in reversed(inspect.getmro(type(descriptor))):
+        protocol.update(cls.__dict__)
+    getter = protocol.get('__get__')
+    setter = protocol.get('__set__')
+    deleter = protocol.get('__delete__')
+    if not callable(getter):
+        raise TypeError('Field descriptors must define a callable __get__.')
+    # Python invokes raw __get__ slots with the descriptor as the first
+    # argument, including callable objects that have their own __get__.
+    read = functools.partial(getter, descriptor)
+    if '__set__' in protocol:
+        setter = bind_field_descriptor_method(descriptor, setter)
+        if not callable(setter):
+            raise TypeError('Field descriptor __set__ must be callable.')
+        access = FieldDescriptorAccess(descriptor, read, setter)
+    elif '__delete__' in protocol:
+        access = DeleteOnlyFieldAccess(descriptor, read)
+    else:
+        access = NonDataFieldAccess(field, descriptor, read)
+    field.descriptor_access = access
+    if '__delete__' in protocol:
+        deleter = bind_field_descriptor_method(descriptor, deleter)
+        if not callable(deleter):
+            raise TypeError('Field descriptor __delete__ must be callable.')
+        return DeletableFieldAttribute(field, access, deleter)
+    if '__set__' not in protocol:
+        return DeletableFieldAttribute(field, access, access.delete)
+    return FieldAttribute(field, access)
+
+
 class RegisterLookupMixin:
 
     @classmethod

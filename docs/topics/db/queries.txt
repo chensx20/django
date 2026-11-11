@@ -962,7 +962,7 @@ simplest case, you can set ``pk`` to ``None``. Using our blog example::
     blog.pk = None
     blog.save() # blog.pk == 2
 
-Things get more complicated if you use inheritance. Consider a subclass of
+The same approach works with multi-table inheritance. Consider a subclass of
 ``Blog``::
 
     class ThemeBlog(Blog):
@@ -971,11 +971,27 @@ Things get more complicated if you use inheritance. Consider a subclass of
     django_blog = ThemeBlog(name='Django', tagline='Django is easy', theme='python')
     django_blog.save() # django_blog.pk == 3
 
-Due to how inheritance works, you have to set both ``pk`` and ``id`` to None::
+Setting ``pk`` to ``None`` clears the primary keys and parent-link identifiers
+throughout the concrete inheritance chain, without querying the database::
 
     django_blog.pk = None
-    django_blog.id = None
     django_blog.save() # django_blog.pk == 4
+
+Assigning ``None`` to a named primary-key field, such as ``django_blog.id``,
+also resets the whole inheritance identity. This includes models with separate
+child primary keys or multiple concrete parents. Cached parent objects aren't
+modified. Primary keys with defaults are regenerated when the copy is saved.
+Assigning a non-``None`` primary key doesn't reset other primary keys.
+
+.. versionchanged:: 3.1
+
+    Previously, copying an inherited instance required clearing both its primary
+    key and the primary keys inherited from its parents.
+
+Load the fields to be copied before resetting the identity of a deferred
+instance. The reset doesn't load deferred data, and that data can no longer be
+retrieved using the cleared identity. Unrelated unique fields must be changed
+before saving the copy to avoid violating uniqueness constraints.
 
 This process doesn't copy relations that aren't part of the model's database
 table. For example, ``Entry`` has a ``ManyToManyField`` to ``Author``. After

@@ -369,6 +369,21 @@ Dropped support for MariaDB 10.1
 Upstream support for MariaDB 10.1 ends in October 2020. Django 3.1 supports
 MariaDB 10.2 and higher.
 
+Resetting inherited primary keys
+--------------------------------
+
+Assigning ``None`` to a model's ``pk`` or a named primary-key field now clears
+its entire concrete inheritance identity, including ancestor primary keys and
+parent-link identifiers. Saving the instance then inserts new rows instead of
+updating its former parents. This also applies before the first save and to
+models with independent child primary keys. Assigning parent objects and
+non-``None`` primary keys retains its existing behavior.
+
+Identity-dependent relation caches on the instance are invalidated without
+queries; cached parent objects aren't modified. This isn't general
+related-object cloning, and unrelated uniqueness constraints still apply.
+See :ref:`topics-db-queries-copy`.
+
 Miscellaneous
 -------------
 

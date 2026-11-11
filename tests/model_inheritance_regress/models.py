@@ -1,4 +1,5 @@
 import datetime
+import uuid
 
 from django.db import models
 
@@ -231,4 +232,48 @@ class Congressman(Person, Politician):
 
 
 class Senator(Congressman):
+    pass
+
+
+class Item(models.Model):
+    uid = models.AutoField(primary_key=True, editable=False)
+    f = models.BooleanField(default=False)
+
+
+class Derived(Item):
+    pass
+
+
+class DeepDerived(Derived):
+    pass
+
+
+class DerivedProxy(Derived):
+    class Meta:
+        proxy = True
+
+
+class UUIDItem(models.Model):
+    uuid = models.UUIDField(primary_key=True, default=uuid.uuid4)
+    f = models.BooleanField(default=False)
+
+
+class UUIDDerived(UUIDItem):
+    pass
+
+
+class IndependentUUIDDerived(UUIDItem):
+    child_id = models.UUIDField(primary_key=True, default=uuid.uuid4)
+
+
+class DiamondLeft(Item):
+    left = models.IntegerField(default=1)
+
+
+class DiamondRight(Item):
+    item_link = models.OneToOneField(Item, models.CASCADE, parent_link=True, primary_key=True)
+    right = models.IntegerField(default=2)
+
+
+class DiamondLeaf(DiamondLeft, DiamondRight):
     pass
