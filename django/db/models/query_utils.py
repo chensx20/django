@@ -168,26 +168,70 @@ class PrimaryKeyDeferredAttribute:
     def __init__(self, field, descriptor):
         self.field = field
         self.descriptor = descriptor
-        # Non-data descriptors use instance storage for assignment/deletion.
-        self._set = getattr(descriptor, '__set__', self._set_value)
-        self._delete = getattr(descriptor, '__delete__', self._delete_value)
+        missing = object()
+
+        def special_method(name):
+            # Special methods belong to the type, not the descriptor instance.
+            for cls in type(descriptor).__mro__:
+                if name in cls.__dict__:
+                    method = cls.__dict__[name]
+                    for method_cls in type(method).__mro__:
+                        if '__get__' in method_cls.__dict__:
+                            return method_cls.__dict__['__get__'](method, descriptor, type(descriptor))
+                    return method
+            return missing
+
+        self._getter = special_method('__get__')
+        setter = special_method('__set__')
+        deleter = special_method('__delete__')
+        data_descriptor = setter is not missing or deleter is not missing
+        self._can_set = setter is not missing or not data_descriptor
+        self._can_delete = deleter is not missing or not data_descriptor
+        self._set = self._set_value if setter is missing else setter
+        self._delete = self._delete_value if deleter is missing else deleter
+        if self._getter is missing:
+            self._get = self._get_value
+        elif data_descriptor:
+            self._get = self._get_descriptor
+        else:
+            self._get = self._get_shadowed
 
     def __get__(self, instance, cls=None):
-        return self.descriptor.__get__(instance, cls)
+        return self._get(instance, cls)
+
+    def _get_descriptor(self, instance, cls):
+        return self._getter(instance, cls)
+
+    def _get_shadowed(self, instance, cls):
+        if instance is not None and self.field.attname in instance.__dict__:
+            return instance.__dict__[self.field.attname]
+        return self._getter(instance, cls)
+
+    def _get_value(self, instance, cls):
+        if instance is not None and self.field.attname in instance.__dict__:
+            return instance.__dict__[self.field.attname]
+        return self.descriptor
 
     def __set__(self, instance, value):
+        if not self._can_set:
+            raise AttributeError('__set__')
         instance._generated_pk_fields -= {self.field.attname}
-        self._set(instance, value)
+        return self._set(instance, value)
 
     def __delete__(self, instance):
+        if not self._can_delete:
+            raise AttributeError('__delete__')
         instance._generated_pk_fields -= {self.field.attname}
-        self._delete(instance)
+        return self._delete(instance)
 
     def _set_value(self, instance, value):
         instance.__dict__[self.field.attname] = value
 
     def _delete_value(self, instance):
-        del instance.__dict__[self.field.attname]
+        try:
+            del instance.__dict__[self.field.attname]
+        except KeyError:
+            raise AttributeError(self.field.attname) from None
 
 
 class RegisterLookupMixin:

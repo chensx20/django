@@ -9,11 +9,89 @@ from django.test import TestCase
 
 from .models import (
     ConcreteDefaultPK, DefaultPKChild, DefaultPKGrandchild, DefaultPKProxy,
-    WithCustomDescriptorPK, WithCustomPK, WithDefaultPK, WithFalsyDefaultPK,
+    PromotedDefaultPKChild, WithComputedDescriptorPK, WithCustomDescriptorPK,
+    WithCustomPK, WithDefaultPK, WithFalsyDefaultPK, WithReplacedDescriptorPK,
 )
 
 
 class DefaultPrimaryKeyTests(TestCase):
+    def test_non_data_descriptor_explicit_keys(self):
+        for model in (WithComputedDescriptorPK, WithReplacedDescriptorPK):
+            for constructor in (
+                lambda model, key: model(key=key, value=2),
+                lambda model, key: model(pk=key, value=2),
+                lambda model, key: model(key, 2),
+            ):
+                for existing in (False, True):
+                    with self.subTest(model=model, constructor=constructor, existing=existing):
+                        key = str(uuid.uuid4())
+                        if existing:
+                            model.objects.create(pk=key, value=1)
+                        obj = constructor(model, key)
+                        self.assertEqual(obj.key, key)
+                        with self.assertNumQueries(1 if existing else 2) as queries:
+                            obj.save()
+                        self.assertTrue(queries[0]['sql'].startswith('UPDATE'))
+                        self.assertEqual(model.objects.get(pk=key).value, 2)
+                        self.assertNotIn('computed_reads', obj.__dict__)
+            self.assertFalse(model.objects.filter(pk='computed').exists())
+
+    def test_non_data_descriptor_assignment(self):
+        for model in (WithComputedDescriptorPK, WithReplacedDescriptorPK):
+            for attribute in ('key', 'pk'):
+                for same_value in (False, True):
+                    for existing in (False, True):
+                        with self.subTest(model=model, attribute=attribute, same_value=same_value, existing=existing):
+                            obj = model(value=2)
+                            key = obj.pk if same_value else str(uuid.uuid4())
+                            if existing:
+                                model.objects.create(pk=key, value=1)
+                            setattr(obj, attribute, key)
+                            with self.assertNumQueries(1 if existing else 2) as queries:
+                                obj.save()
+                            self.assertTrue(queries[0]['sql'].startswith('UPDATE'))
+                            self.assertNotIn('key', obj._generated_pk_fields)
+                            self.assertEqual(str(obj.pk), str(key))
+                            self.assertEqual(model.objects.get(pk=key).value, 2)
+                            self.assertNotIn('computed_reads', obj.__dict__)
+            self.assertFalse(model.objects.filter(pk='computed').exists())
+
+    def test_non_data_descriptor_generation(self):
+        for model in (WithComputedDescriptorPK, WithReplacedDescriptorPK):
+            for options in ({}, {'key': None}):
+                with self.subTest(model=model, options=options):
+                    obj = model(**options)
+                    with self.assertNumQueries(1) as queries:
+                        obj.save()
+                    self.assertTrue(queries[0]['sql'].startswith('INSERT'))
+                    self.assertIn('key', obj._generated_pk_fields)
+                    self.assertNotIn('computed_reads', obj.__dict__)
+                    self.assertEqual(str(model.objects.get(pk=obj.pk).pk), str(obj.pk))
+
+    def test_non_data_descriptor_attribute_deletion(self):
+        for model in (WithComputedDescriptorPK, WithReplacedDescriptorPK):
+            with self.subTest(model=model):
+                obj = model()
+                self.assertIn('key', obj._generated_pk_fields)
+                del obj.key
+                self.assertNotIn('key', obj._generated_pk_fields)
+                self.assertEqual(obj.key, 'computed')
+                self.assertEqual(obj.computed_reads, 1)
+                with self.assertRaisesMessage(AttributeError, 'key'):
+                    del obj.key
+
+    def test_non_data_descriptor_database_deletion(self):
+        for model in (WithComputedDescriptorPK, WithReplacedDescriptorPK):
+            with self.subTest(model=model):
+                sentinel = model.objects.create(pk='computed', value=1)
+                obj = model.objects.create(pk='explicit', value=2)
+                self.assertEqual(obj.delete(), (1, {model._meta.label: 1}))
+                self.assertIsNone(obj.pk)
+                self.assertNotIn('computed_reads', obj.__dict__)
+                self.assertFalse(model.objects.filter(pk='explicit').exists())
+                sentinel.refresh_from_db()
+                self.assertEqual(sentinel.value, 1)
+
     def test_custom_descriptor_generated_default(self):
         obj = WithCustomDescriptorPK(value=1)
         self.assertEqual(obj._key_set_count, 1)
@@ -295,6 +373,19 @@ class DefaultPrimaryKeyTests(TestCase):
 
 
 class InheritedDefaultPrimaryKeyTests(TestCase):
+    def test_promoted_parent_link(self):
+        with self.assertNumQueries(2) as queries:
+            obj = PromotedDefaultPKChild.objects.create(value=1)
+        self.assertTrue(all(query['sql'].startswith('INSERT') for query in queries))
+        replacement = PromotedDefaultPKChild(parent=obj.parent, value=2)
+        replacement.save()
+        obj.refresh_from_db()
+        self.assertEqual(obj.value, 2)
+        replacement._generated_pk_fields |= {'parent_id'}
+        replacement.parent_id = replacement.parent_id
+        self.assertNotIn('parent_id', replacement._generated_pk_fields)
+        self.assertEqual(PromotedDefaultPKChild.objects.count(), 1)
+
     def test_generated_default_per_table(self):
         for model, count in ((DefaultPKChild, 2), (DefaultPKGrandchild, 3)):
             with self.subTest(model=model):

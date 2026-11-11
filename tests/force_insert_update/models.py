@@ -47,6 +47,42 @@ class WithCustomDescriptorPK(models.Model):
     value = models.IntegerField(default=0)
 
 
+class ComputedKeyDescriptor:
+    def __init__(self, field):
+        self.field = field
+
+    def __get__(self, instance, owner):
+        if instance is None:
+            return self
+        instance.computed_reads = instance.__dict__.get('computed_reads', 0) + 1
+        return 'computed'
+
+
+class ComputedKeyField(models.CharField):
+    descriptor_class = ComputedKeyDescriptor
+
+
+class ReplacedKeyField(models.CharField):
+    def contribute_to_class(self, cls, name, **kwargs):
+        super().contribute_to_class(cls, name, **kwargs)
+        setattr(cls, self.attname, ComputedKeyDescriptor(self))
+
+
+class WithComputedDescriptorPK(models.Model):
+    key = ComputedKeyField(primary_key=True, max_length=36, default=uuid.uuid4)
+    value = models.IntegerField(default=0)
+
+
+class WithReplacedDescriptorPK(models.Model):
+    key = ReplacedKeyField(primary_key=True, max_length=36, default=uuid.uuid4)
+    value = models.IntegerField(default=0)
+
+
+class PromotedDefaultPKChild(WithDefaultPK):
+    parent = models.OneToOneField(WithDefaultPK, on_delete=models.CASCADE, parent_link=True)
+    child_value = models.IntegerField(default=0)
+
+
 class DefaultPKChild(WithDefaultPK):
     child_value = models.IntegerField(default=0)
 

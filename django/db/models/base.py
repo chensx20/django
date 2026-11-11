@@ -28,6 +28,7 @@ from django.db.models.functions import Coalesce
 from django.db.models.manager import Manager
 from django.db.models.options import Options
 from django.db.models.query import Q
+from django.db.models.query_utils import PrimaryKeyDeferredAttribute
 from django.db.models.signals import (
     class_prepared, post_init, post_save, pre_init, pre_save,
 )
@@ -331,6 +332,11 @@ class ModelBase(type):
         """Create some methods once self._meta has been populated."""
         opts = cls._meta
         opts._prepare(cls)
+        for field in opts.concrete_fields:
+            if field.primary_key:
+                descriptor = inspect.getattr_static(cls, field.attname)
+                if not isinstance(descriptor, PrimaryKeyDeferredAttribute):
+                    setattr(cls, field.attname, PrimaryKeyDeferredAttribute(field, descriptor))
 
         if opts.order_with_respect_to:
             cls.get_next_in_order = partialmethod(cls._get_next_or_previous_in_order, is_next=True)
