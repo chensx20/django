@@ -98,6 +98,13 @@ def simple_keyword_only_default(*, kwarg=42):
     return "simple_keyword_only_default - Expected result: %s" % kwarg
 
 
+@register.simple_tag(takes_context=True)
+def simple_keyword_only_context(context, arg, *, required, kwarg=42):
+    return "simple_keyword_only_context - Expected result: %s, %s, %s, %s" % (
+        context['value'], arg, required, kwarg,
+    )
+
+
 @register.simple_tag
 def simple_one_default(one, two='hi'):
     """Expected simple_one_default __doc__"""

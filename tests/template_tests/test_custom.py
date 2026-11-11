@@ -62,6 +62,12 @@ class SimpleTagTests(TagTestCase):
                 'simple_keyword_only_param - Expected result: 37'),
             ('{% load custom %}{% simple_keyword_only_default %}',
                 'simple_keyword_only_default - Expected result: 42'),
+            ('{% load custom %}{% simple_keyword_only_default kwarg=37 %}',
+                'simple_keyword_only_default - Expected result: 37'),
+            ('{% load custom %}{% simple_keyword_only_context 1 required=2 %}',
+                'simple_keyword_only_context - Expected result: 42, 1, 2, 42'),
+            ('{% load custom %}{% simple_keyword_only_context arg=1 kwarg=3 required=2 %}',
+                'simple_keyword_only_context - Expected result: 42, 1, 2, 3'),
             ('{% load custom %}{% simple_one_default 37 %}', 'simple_one_default - Expected result: 37, hi'),
             ('{% load custom %}{% simple_one_default 37 two="hello" %}',
                 'simple_one_default - Expected result: 37, hello'),
@@ -80,12 +86,14 @@ class SimpleTagTests(TagTestCase):
         ]
 
         for entry in templates:
-            t = self.engine.from_string(entry[0])
-            self.assertEqual(t.render(c), entry[1])
+            with self.subTest(template=entry[0]):
+                t = self.engine.from_string(entry[0])
+                self.assertEqual(t.render(c), entry[1])
 
         for entry in templates:
-            t = self.engine.from_string("%s as var %%}Result: {{ var }}" % entry[0][0:-2])
-            self.assertEqual(t.render(c), "Result: %s" % entry[1])
+            with self.subTest(template=entry[0], assignment=True):
+                t = self.engine.from_string("%s as var %%}Result: {{ var }}" % entry[0][0:-2])
+                self.assertEqual(t.render(c), "Result: %s" % entry[1])
 
     def test_simple_tag_errors(self):
         errors = [
@@ -97,6 +105,20 @@ class SimpleTagTests(TagTestCase):
                 '{% load custom %}{% simple_one_default 37 42 56 %}'),
             ("'simple_keyword_only_param' did not receive value(s) for the argument(s): 'kwarg'",
                 '{% load custom %}{% simple_keyword_only_param %}'),
+            ("'simple_keyword_only_param' received multiple values for keyword argument 'kwarg'",
+                '{% load custom %}{% simple_keyword_only_param kwarg=37 kwarg=42 %}'),
+            ("'simple_keyword_only_default' received multiple values for keyword argument 'kwarg'",
+                '{% load custom %}{% simple_keyword_only_default kwarg=37 kwarg=42 %}'),
+            ("'simple_keyword_only_param' received unexpected keyword argument 'other'",
+                '{% load custom %}{% simple_keyword_only_param kwarg=37 other=42 %}'),
+            ("'simple_keyword_only_default' received unexpected keyword argument 'other'",
+                '{% load custom %}{% simple_keyword_only_default other=37 %}'),
+            ("'simple_keyword_only_param' received too many positional arguments",
+                '{% load custom %}{% simple_keyword_only_param 37 %}'),
+            ("'simple_keyword_only_default' received too many positional arguments",
+                '{% load custom %}{% simple_keyword_only_default 37 %}'),
+            ("'simple_keyword_only_context' did not receive value(s) for the argument(s): 'required'",
+                '{% load custom %}{% simple_keyword_only_context 1 kwarg=3 %}'),
             ("'simple_unlimited_args_kwargs' received some positional argument(s) after some keyword argument(s)",
                 '{% load custom %}{% simple_unlimited_args_kwargs 37 40|add:2 eggs="scrambled" 56 four=1|add:3 %}'),
             ("'simple_unlimited_args_kwargs' received multiple values for keyword argument 'eggs'",
@@ -104,12 +126,16 @@ class SimpleTagTests(TagTestCase):
         ]
 
         for entry in errors:
-            with self.assertRaisesMessage(TemplateSyntaxError, entry[0]):
-                self.engine.from_string(entry[1])
+            with self.subTest(template=entry[1]):
+                with self.assertRaisesMessage(TemplateSyntaxError, entry[0]) as cm:
+                    self.engine.from_string(entry[1])
+                self.assertEqual(str(cm.exception), entry[0])
 
         for entry in errors:
-            with self.assertRaisesMessage(TemplateSyntaxError, entry[0]):
-                self.engine.from_string("%s as var %%}" % entry[1][0:-2])
+            with self.subTest(template=entry[1], assignment=True):
+                with self.assertRaisesMessage(TemplateSyntaxError, entry[0]) as cm:
+                    self.engine.from_string("%s as var %%}" % entry[1][0:-2])
+                self.assertEqual(str(cm.exception), entry[0])
 
     def test_simple_tag_escaping_autoescape_off(self):
         c = Context({'name': "Jack & Jill"}, autoescape=False)
@@ -170,6 +196,16 @@ class InclusionTagTests(TagTestCase):
                 'inclusion_params_and_context - Expected result (context value: 42): 37\n'),
             ('{% load inclusion %}{% inclusion_two_params 37 42 %}',
                 'inclusion_two_params - Expected result: 37, 42\n'),
+            ('{% load inclusion %}{% inclusion_keyword_only_param kwarg=37 %}',
+                'inclusion_keyword_only_param - Expected result: 37\n'),
+            ('{% load inclusion %}{% inclusion_keyword_only_default %}',
+                'inclusion_keyword_only_default - Expected result: 42\n'),
+            ('{% load inclusion %}{% inclusion_keyword_only_default kwarg=37 %}',
+                'inclusion_keyword_only_default - Expected result: 37\n'),
+            ('{% load inclusion %}{% inclusion_keyword_only_context 1 required=2 %}',
+                'inclusion_keyword_only_context - Expected result: 42, 1, 2, 42\n'),
+            ('{% load inclusion %}{% inclusion_keyword_only_context arg=1 kwarg=3 required=2 %}',
+                'inclusion_keyword_only_context - Expected result: 42, 1, 2, 3\n'),
             (
                 '{% load inclusion %}{% inclusion_one_default 37 %}',
                 'inclusion_one_default - Expected result: 37, hi\n'
@@ -193,8 +229,9 @@ class InclusionTagTests(TagTestCase):
         ]
 
         for entry in templates:
-            t = self.engine.from_string(entry[0])
-            self.assertEqual(t.render(c), entry[1])
+            with self.subTest(template=entry[0]):
+                t = self.engine.from_string(entry[0])
+                self.assertEqual(t.render(c), entry[1])
 
     def test_inclusion_tag_errors(self):
         errors = [
@@ -206,6 +243,22 @@ class InclusionTagTests(TagTestCase):
                 '{% load inclusion %}{% inclusion_one_default 37 42 56 %}'),
             ("'inclusion_one_default' did not receive value(s) for the argument(s): 'one'",
                 '{% load inclusion %}{% inclusion_one_default %}'),
+            ("'inclusion_keyword_only_param' did not receive value(s) for the argument(s): 'kwarg'",
+                '{% load inclusion %}{% inclusion_keyword_only_param %}'),
+            ("'inclusion_keyword_only_param' received multiple values for keyword argument 'kwarg'",
+                '{% load inclusion %}{% inclusion_keyword_only_param kwarg=37 kwarg=42 %}'),
+            ("'inclusion_keyword_only_default' received multiple values for keyword argument 'kwarg'",
+                '{% load inclusion %}{% inclusion_keyword_only_default kwarg=37 kwarg=42 %}'),
+            ("'inclusion_keyword_only_param' received unexpected keyword argument 'other'",
+                '{% load inclusion %}{% inclusion_keyword_only_param kwarg=37 other=42 %}'),
+            ("'inclusion_keyword_only_default' received unexpected keyword argument 'other'",
+                '{% load inclusion %}{% inclusion_keyword_only_default other=37 %}'),
+            ("'inclusion_keyword_only_param' received too many positional arguments",
+                '{% load inclusion %}{% inclusion_keyword_only_param 37 %}'),
+            ("'inclusion_keyword_only_default' received too many positional arguments",
+                '{% load inclusion %}{% inclusion_keyword_only_default 37 %}'),
+            ("'inclusion_keyword_only_context' did not receive value(s) for the argument(s): 'required'",
+                '{% load inclusion %}{% inclusion_keyword_only_context 1 kwarg=3 %}'),
             ("'inclusion_unlimited_args' did not receive value(s) for the argument(s): 'one'",
                 '{% load inclusion %}{% inclusion_unlimited_args %}'),
             (
@@ -218,8 +271,10 @@ class InclusionTagTests(TagTestCase):
         ]
 
         for entry in errors:
-            with self.assertRaisesMessage(TemplateSyntaxError, entry[0]):
-                self.engine.from_string(entry[1])
+            with self.subTest(template=entry[1]):
+                with self.assertRaisesMessage(TemplateSyntaxError, entry[0]) as cm:
+                    self.engine.from_string(entry[1])
+                self.assertEqual(str(cm.exception), entry[0])
 
     def test_include_tag_missing_context(self):
         # The 'context' parameter must be present when takes_context is True
