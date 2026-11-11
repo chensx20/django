@@ -137,6 +137,27 @@ class IntegerFieldTests(TestCase):
         instance = self.model.objects.get(value='10')
         self.assertEqual(instance.value, 10)
 
+    def test_assignment_from_choice_enum(self):
+        class Value(models.IntegerChoices):
+            A = 1, 'One'
+
+        instance = self.model(value=Value.A)
+        self.assertIs(instance.value, Value.A)
+        self.assertIsInstance(instance.value, int)
+        self.assertEqual(str(instance.value), '1')
+        instance.save()
+        self.assertEqual(instance.value, Value.A)
+        self.assertIsInstance(instance.value, int)
+        self.assertEqual(str(instance.value), '1')
+        retrieved = self.model.objects.get(pk=instance.pk)
+        self.assertEqual(retrieved.value, Value.A)
+        self.assertIsInstance(retrieved.value, int)
+        self.assertEqual(str(retrieved.value), '1')
+        instance.refresh_from_db()
+        self.assertEqual(instance.value, Value.A)
+        self.assertIsInstance(instance.value, int)
+        self.assertEqual(str(instance.value), '1')
+
     def test_invalid_value(self):
         tests = [
             (TypeError, ()),

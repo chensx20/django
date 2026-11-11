@@ -34,7 +34,17 @@ class TestCharField(TestCase):
             F = 'Festival!'
 
         p1 = Post.objects.create(title=Event.C, body=Event.F)
+        self.assertIs(p1.title, Event.C)
+        self.assertIs(p1.body, Event.F)
+        self.assertIsInstance(p1.title, str)
+        self.assertIsInstance(p1.body, str)
+        self.assertEqual(str(p1.title), 'Carnival!')
+        self.assertEqual(str(p1.body), 'Festival!')
         p1.refresh_from_db()
+        self.assertIsInstance(p1.title, str)
+        self.assertIsInstance(p1.body, str)
+        self.assertEqual(str(p1.title), 'Carnival!')
+        self.assertEqual(str(p1.body), 'Festival!')
         self.assertEqual(p1.title, 'Carnival!')
         self.assertEqual(p1.body, 'Festival!')
         self.assertEqual(p1.title, Event.C)
@@ -42,6 +52,11 @@ class TestCharField(TestCase):
         p2 = Post.objects.get(title='Carnival!')
         self.assertEqual(p1, p2)
         self.assertEqual(p2.title, Event.C)
+        self.assertEqual(p2.body, Event.F)
+        self.assertIsInstance(p2.title, str)
+        self.assertIsInstance(p2.body, str)
+        self.assertEqual(str(p2.title), 'Carnival!')
+        self.assertEqual(str(p2.body), 'Festival!')
 
 
 class ValidationTests(SimpleTestCase):

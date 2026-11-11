@@ -48,6 +48,10 @@ class ChoicesTests(SimpleTestCase):
         self.assertEqual(Suit.names, ['DIAMOND', 'SPADE', 'HEART', 'CLUB'])
 
         self.assertEqual(repr(Suit.DIAMOND), '<Suit.DIAMOND: 1>')
+        self.assertEqual(str(Suit.DIAMOND), '1')
+        self.assertEqual(Suit.DIAMOND, 1)
+        self.assertEqual(hash(Suit.DIAMOND), hash(1))
+        self.assertEqual(Suit.DIAMOND.name, 'DIAMOND')
         self.assertEqual(Suit.DIAMOND.label, 'Diamond')
         self.assertEqual(Suit.DIAMOND.value, 1)
         self.assertEqual(Suit['DIAMOND'], Suit.DIAMOND)
@@ -55,6 +59,7 @@ class ChoicesTests(SimpleTestCase):
 
         self.assertIsInstance(Suit, type(models.Choices))
         self.assertIsInstance(Suit.DIAMOND, Suit)
+        self.assertIsInstance(Suit.DIAMOND, int)
         self.assertIsInstance(Suit.DIAMOND.label, Promise)
         self.assertIsInstance(Suit.DIAMOND.value, int)
 
@@ -74,6 +79,7 @@ class ChoicesTests(SimpleTestCase):
         self.assertEqual(Place.labels, ['First', 'Second', 'Third'])
         self.assertEqual(Place.values, [1, 2, 3])
         self.assertEqual(Place.names, ['FIRST', 'SECOND', 'THIRD'])
+        self.assertEqual(str(Place.FIRST), '1')
 
     def test_integerchoices_containment(self):
         self.assertIn(Suit.DIAMOND, Suit)
@@ -89,6 +95,10 @@ class ChoicesTests(SimpleTestCase):
         self.assertEqual(YearInSchool.names, ['FRESHMAN', 'SOPHOMORE', 'JUNIOR', 'SENIOR', 'GRADUATE'])
 
         self.assertEqual(repr(YearInSchool.FRESHMAN), "<YearInSchool.FRESHMAN: 'FR'>")
+        self.assertEqual(str(YearInSchool.FRESHMAN), 'FR')
+        self.assertEqual(YearInSchool.FRESHMAN, 'FR')
+        self.assertEqual(hash(YearInSchool.FRESHMAN), hash('FR'))
+        self.assertEqual(YearInSchool.FRESHMAN.name, 'FRESHMAN')
         self.assertEqual(YearInSchool.FRESHMAN.label, 'Freshman')
         self.assertEqual(YearInSchool.FRESHMAN.value, 'FR')
         self.assertEqual(YearInSchool['FRESHMAN'], YearInSchool.FRESHMAN)
@@ -96,6 +106,7 @@ class ChoicesTests(SimpleTestCase):
 
         self.assertIsInstance(YearInSchool, type(models.Choices))
         self.assertIsInstance(YearInSchool.FRESHMAN, YearInSchool)
+        self.assertIsInstance(YearInSchool.FRESHMAN, str)
         self.assertIsInstance(YearInSchool.FRESHMAN.label, Promise)
         self.assertIsInstance(YearInSchool.FRESHMAN.value, str)
 
@@ -115,6 +126,7 @@ class ChoicesTests(SimpleTestCase):
         self.assertEqual(Medal.labels, ['Gold', 'Silver', 'Bronze'])
         self.assertEqual(Medal.values, ['GOLD', 'SILVER', 'BRONZE'])
         self.assertEqual(Medal.names, ['GOLD', 'SILVER', 'BRONZE'])
+        self.assertEqual(str(Medal.GOLD), 'GOLD')
 
     def test_textchoices_containment(self):
         self.assertIn(YearInSchool.FRESHMAN, YearInSchool)
@@ -129,6 +141,7 @@ class ChoicesTests(SimpleTestCase):
         self.assertEqual(BlankStr.labels, ['(Empty)', 'One'])
         self.assertEqual(BlankStr.values, ['', 'ONE'])
         self.assertEqual(BlankStr.names, ['EMPTY', 'ONE'])
+        self.assertEqual(str(BlankStr.EMPTY), '')
 
     def test_invalid_definition(self):
         msg = "'str' object cannot be interpreted as an integer"
@@ -224,6 +237,18 @@ class IPv6Network(ipaddress.IPv6Network, models.Choices):
 
 
 class CustomChoicesTests(SimpleTestCase):
+    def test_str(self):
+        self.assertEqual(str(MoonLandings.APOLLO_11), '1969-07-20')
+
+    def test_str_override(self):
+        class CustomChoices(models.IntegerChoices):
+            ONE = 1, 'One'
+
+            def __str__(self):
+                return self.label
+
+        self.assertEqual(str(CustomChoices.ONE), 'One')
+
     def test_labels_valid(self):
         enums = (
             Separator, Constants, Set, MoonLandings, DateAndTime, MealTimes,
