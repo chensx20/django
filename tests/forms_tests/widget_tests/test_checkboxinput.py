@@ -21,6 +21,26 @@ class CheckboxInputTest(WidgetTest):
             html='<input checked type="checkbox" name="is_cool">'
         )
 
+    def test_get_context_attrs_not_mutated(self):
+        for attrs in ({}, {'id': 'is_cool', 'class': 'checkbox'}):
+            with self.subTest(attrs=attrs):
+                original_attrs = attrs.copy()
+                context = self.widget.get_context('is_cool', True, attrs)
+                self.assertEqual(attrs, original_attrs)
+                self.assertEqual(context['widget']['attrs'], {**original_attrs, 'checked': True})
+                context = self.widget.get_context('is_cool', False, attrs)
+                self.assertEqual(context['widget']['attrs'], original_attrs)
+                self.assertEqual(attrs, original_attrs)
+
+    def test_get_context_checked_attrs(self):
+        widget = CheckboxInput(attrs={'class': 'default', 'checked': False})
+        attrs = {'class': 'custom', 'checked': False}
+        context = widget.get_context('is_cool', True, attrs)
+        self.assertEqual(context['widget']['attrs'], {'class': 'custom', 'checked': True})
+        self.assertEqual(attrs, {'class': 'custom', 'checked': False})
+        context = widget.get_context('is_cool', False, {'checked': True})
+        self.assertEqual(context['widget']['attrs'], {'class': 'default', 'checked': True})
+
     def test_render_value(self):
         """
         Using any value that's not in ('', None, False, True) will check the
