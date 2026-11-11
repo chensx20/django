@@ -4,9 +4,10 @@ import ipaddress
 import uuid
 
 from django.db import models
+from django.template import Context, Engine
 from django.test import SimpleTestCase
 from django.utils.functional import Promise
-from django.utils.translation import gettext_lazy as _
+from django.utils.translation import gettext_lazy as _, override
 
 
 class Suit(models.IntegerChoices):
@@ -41,6 +42,60 @@ class Gender(models.TextChoices):
 
 
 class ChoicesTests(SimpleTestCase):
+    def test_do_not_call_in_templates(self):
+        enums = (
+            models.Choices, models.IntegerChoices, models.TextChoices,
+            Suit, YearInSchool, Vehicle, Gender, Separator, Constants, Set,
+            MoonLandings, DateAndTime, MealTimes, Frequency, Number,
+            IPv4Address, IPv6Address, IPv4Network, IPv6Network,
+            models.IntegerChoices('Place', 'FIRST SECOND THIRD'),
+            models.TextChoices('Medal', 'GOLD SILVER BRONZE'),
+        )
+        for choice_enum in enums:
+            with self.subTest(choice_enum=choice_enum):
+                self.assertIs(choice_enum.do_not_call_in_templates, True)
+                self.assertNotIn('do_not_call_in_templates', choice_enum.__members__)
+
+    @override('en')
+    def test_templates(self):
+        class Student:
+            YearInSchool = YearInSchool
+
+        context = Context({'Suit': Suit, 'YearInSchool': YearInSchool, 'student': Student()})
+        tests = [
+            ('{{ Suit.DIAMOND }}', '1'),
+            ('{{ Suit.DIAMOND.value }}', '1'),
+            ('{{ Suit.DIAMOND.label }}', 'Diamond'),
+            ('{{ YearInSchool.FRESHMAN }}', 'FR'),
+            ('{{ YearInSchool.FRESHMAN.value }}', 'FR'),
+            ('{{ YearInSchool.FRESHMAN.label }}', 'Freshman'),
+            ('{{ student.YearInSchool.FRESHMAN }}', 'FR'),
+            ('{{ student.YearInSchool.FRESHMAN.value }}', 'FR'),
+            ('{{ student.YearInSchool.FRESHMAN.label }}', 'Freshman'),
+        ]
+        engine = Engine()
+        for source, expected in tests:
+            with self.subTest(source=source):
+                self.assertEqual(engine.from_string(source).render(context), expected)
+
+    def test_template_conditional(self):
+        template = Engine().from_string(
+            '{% if student.year_in_school == YearInSchool.FRESHMAN %}'
+            'Freshman{% else %}Not a freshman{% endif %}'
+        )
+        for value, expected in [
+            (YearInSchool.FRESHMAN, 'Freshman'),
+            ('FR', 'Freshman'),
+            (YearInSchool.SOPHOMORE, 'Not a freshman'),
+            ('SO', 'Not a freshman'),
+        ]:
+            with self.subTest(value=value):
+                context = Context({
+                    'student': {'year_in_school': value},
+                    'YearInSchool': YearInSchool,
+                })
+                self.assertEqual(template.render(context), expected)
+
     def test_integerchoices(self):
         self.assertEqual(Suit.choices, [(1, 'Diamond'), (2, 'Spade'), (3, 'Heart'), (4, 'Club')])
         self.assertEqual(Suit.labels, ['Diamond', 'Spade', 'Heart', 'Club'])
@@ -74,6 +129,9 @@ class ChoicesTests(SimpleTestCase):
         self.assertEqual(Place.labels, ['First', 'Second', 'Third'])
         self.assertEqual(Place.values, [1, 2, 3])
         self.assertEqual(Place.names, ['FIRST', 'SECOND', 'THIRD'])
+        self.assertEqual(Place(1), Place.FIRST)
+        template = Engine().from_string('{{ Place.FIRST }}|{{ Place.FIRST.value }}|{{ Place.FIRST.label }}')
+        self.assertEqual(template.render(Context({'Place': Place})), '1|1|First')
 
     def test_integerchoices_containment(self):
         self.assertIn(Suit.DIAMOND, Suit)
@@ -115,6 +173,9 @@ class ChoicesTests(SimpleTestCase):
         self.assertEqual(Medal.labels, ['Gold', 'Silver', 'Bronze'])
         self.assertEqual(Medal.values, ['GOLD', 'SILVER', 'BRONZE'])
         self.assertEqual(Medal.names, ['GOLD', 'SILVER', 'BRONZE'])
+        self.assertEqual(Medal('GOLD'), Medal.GOLD)
+        template = Engine().from_string('{{ Medal.GOLD }}|{{ Medal.GOLD.value }}|{{ Medal.GOLD.label }}')
+        self.assertEqual(template.render(Context({'Medal': Medal})), 'GOLD|GOLD|Gold')
 
     def test_textchoices_containment(self):
         self.assertIn(YearInSchool.FRESHMAN, YearInSchool)
