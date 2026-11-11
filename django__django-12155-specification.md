@@ -39,24 +39,27 @@ The same utility is used by tag, filter, and model documentation, so the correct
 
 ## Reproduction and exact normalization contract
 
-The following are escaped string representations, not implementation code:
+The following text blocks show string content, not implementation code. The input also has a final newline, removed by normalization.
 
-- Input: `Summary.
+Input (and current normalized content, except its removed final newline):
+
+```text
+Summary.
 
     Body paragraph.
 
     Context: description
-`.
-- Current normalization: `Summary.
+```
 
-    Body paragraph.
+Required normalized content:
 
-    Context: description`.
-- Required normalization: `Summary.
+```text
+Summary.
 
 Body paragraph.
 
-Context: description`.
+Context: description
+```
 - Required parse result: title `Summary.`, body `Body paragraph.`, metadata mapping with `Context` equal to `description`.
 - Rendering the parsed body must produce an ordinary paragraph, not a directive diagnostic or an unintended block quote.
 
