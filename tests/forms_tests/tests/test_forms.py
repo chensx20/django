@@ -8,11 +8,11 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core.validators import MaxValueValidator, RegexValidator
 from django.forms import (
     BooleanField, CharField, CheckboxSelectMultiple, ChoiceField, DateField,
-    DateTimeField, EmailField, FileField, FloatField, Form, HiddenInput,
-    ImageField, IntegerField, MultipleChoiceField, MultipleHiddenInput,
-    MultiValueField, NullBooleanField, PasswordInput, RadioSelect, Select,
-    SplitDateTimeField, SplitHiddenDateTimeWidget, Textarea, TextInput,
-    TimeField, ValidationError, forms,
+    DateTimeField, EmailField, FileField, FileInput, FloatField, Form,
+    HiddenInput, ImageField, IntegerField, MultipleChoiceField,
+    MultipleHiddenInput, MultiValueField, NullBooleanField, PasswordInput,
+    RadioSelect, Select, SplitDateTimeField, SplitHiddenDateTimeWidget,
+    Textarea, TextInput, TimeField, ValidationError, forms,
 )
 from django.forms.renderers import DjangoTemplates, get_default_renderer
 from django.forms.utils import ErrorList
@@ -2477,6 +2477,54 @@ Password: <input type="password" name="password" required>
             f.as_table(),
             '<tr><th>File1:</th><td><input type="file" name="file1"></td></tr>',
         )
+
+    def test_fileinput_initial(self):
+        class FileForm(Form):
+            file1 = FileField(widget=FileInput)
+
+        initial = SimpleUploadedFile('resume.txt', b'initial content')
+        for data in (None, {}):
+            with self.subTest(data=data):
+                form = FileForm(data=data, initial={'file1': initial}, auto_id=False)
+                self.assertHTMLEqual(str(form['file1']), '<input type="file" name="file1">')
+                if data is not None:
+                    self.assertTrue(form.is_valid())
+                    self.assertIs(form.cleaned_data['file1'], initial)
+
+    def test_fileinput_required_without_initial(self):
+        class FileForm(Form):
+            file1 = FileField(widget=FileInput)
+
+        for initial in (None, ''):
+            with self.subTest(initial=initial):
+                form = FileForm(data={}, initial={'file1': initial}, auto_id=False)
+                self.assertHTMLEqual(str(form['file1']), '<input type="file" name="file1" required>')
+                self.assertFalse(form.is_valid())
+                self.assertEqual(form.errors, {'file1': ['This field is required.']})
+
+    def test_fileinput_replacement(self):
+        class FileForm(Form):
+            file1 = FileField(widget=FileInput)
+
+        upload = SimpleUploadedFile('replacement.txt', b'replacement content')
+        form = FileForm(data={}, files={'file1': upload}, initial={'file1': 'resume.txt'}, auto_id=False)
+        self.assertHTMLEqual(str(form['file1']), '<input type="file" name="file1">')
+        self.assertTrue(form.is_valid())
+        self.assertIs(form.cleaned_data['file1'], upload)
+
+    def test_fileinput_required_attribute_suppressed(self):
+        class FileForm(Form):
+            file1 = FileField(widget=FileInput)
+
+        form = FileForm(auto_id=False)
+        form.fields['file1'].required = False
+        self.assertHTMLEqual(str(form['file1']), '<input type="file" name="file1">')
+        form = FileForm(auto_id=False, use_required_attribute=False)
+        self.assertHTMLEqual(str(form['file1']), '<input type="file" name="file1">')
+        self.assertTrue(form.fields['file1'].required)
+        form = FileForm(auto_id=False)
+        form.fields['file1'].widget.input_type = 'hidden'
+        self.assertHTMLEqual(str(form['file1']), '<input type="hidden" name="file1">')
 
     def test_filefield_initial_callable(self):
         class FileForm(forms.Form):
