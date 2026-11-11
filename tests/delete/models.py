@@ -147,3 +147,55 @@ class SecondReferrer(models.Model):
     other_referrer = models.ForeignKey(
         Referrer, models.CASCADE, to_field='unique_field', related_name='+'
     )
+
+
+class FastDeleteOwner(models.Model):
+    pass
+
+
+class VisibleEntryManager(models.Manager):
+    def get_queryset(self):
+        return super().get_queryset().filter(text='visible')
+
+
+class Entry(models.Model):
+    created_by = models.ForeignKey(FastDeleteOwner, models.CASCADE, related_name='created_entries')
+    updated_by = models.ForeignKey(FastDeleteOwner, models.CASCADE, related_name='updated_entries')
+    text = models.TextField(default='visible')
+    objects = models.Manager()
+    visible = VisibleEntryManager()
+
+    class Meta:
+        default_manager_name = 'visible'
+
+
+class DirectedNode(models.Model):
+    links = models.ManyToManyField('self', symmetrical=False)
+
+
+class SymmetricalNode(models.Model):
+    links = models.ManyToManyField('self')
+
+
+class ActionOwner(models.Model):
+    pass
+
+
+class NullableEntry(models.Model):
+    cascade = models.ForeignKey(ActionOwner, models.CASCADE, related_name='+')
+    nullable = models.ForeignKey(ActionOwner, models.SET_NULL, null=True, related_name='+')
+
+
+class ProtectedEntry(models.Model):
+    cascade = models.ForeignKey(ActionOwner, models.CASCADE, related_name='+')
+    protected = models.ForeignKey(ActionOwner, models.PROTECT, related_name='+')
+
+
+class TargetOwner(models.Model):
+    code = models.CharField(max_length=20, unique=True)
+    number = models.IntegerField(unique=True)
+
+
+class TargetEntry(models.Model):
+    created_by = models.ForeignKey(TargetOwner, models.CASCADE, to_field='code', related_name='+')
+    updated_by = models.ForeignKey(TargetOwner, models.CASCADE, to_field='number', related_name='+')
