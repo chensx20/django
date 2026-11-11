@@ -7,6 +7,16 @@ xview_dec = decorator_from_middleware(XViewMiddleware)
 
 
 def xview(request):
+    """Display a documented view.
+
+    Display an individual :model:`admin_docs.Person`.
+
+    ``person``
+        An instance of :model:`admin_docs.Person`.
+
+    Context: the person
+    Templates: :template:`person.html`
+    """
     return HttpResponse()
 
 
