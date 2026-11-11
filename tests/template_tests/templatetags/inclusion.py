@@ -118,6 +118,25 @@ def inclusion_two_params(one, two):
 inclusion_two_params.anything = "Expected inclusion_two_params __dict__"
 
 
+@register.inclusion_tag('inclusion.html')
+def inclusion_keyword_only_param(*, kwarg):
+    return {"result": "inclusion_keyword_only_param - Expected result: %s" % kwarg}
+
+
+@register.inclusion_tag('inclusion.html')
+def inclusion_keyword_only_default(*, kwarg=42):
+    return {"result": "inclusion_keyword_only_default - Expected result: %s" % kwarg}
+
+
+@register.inclusion_tag('inclusion.html', takes_context=True)
+def inclusion_keyword_only_context(context, arg, *, required, kwarg=42):
+    return {
+        "result": "inclusion_keyword_only_context - Expected result: %s, %s, %s, %s" % (
+            context['value'], arg, required, kwarg,
+        ),
+    }
+
+
 @register.inclusion_tag(engine.get_template('inclusion.html'))
 def inclusion_two_params_from_template(one, two):
     """Expected inclusion_two_params_from_template __doc__"""
