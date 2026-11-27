@@ -11,7 +11,8 @@ from django.test import TestCase, skipUnlessDBFeature
 from django.utils.deprecation import RemovedInDjango40Warning
 
 from .models import (
-    Article, Author, Freebie, Game, IsNullWithNoneAsRHS, Player, Season, Tag,
+    Article, Author, Freebie, Game, InBulkUniqueConstraint,
+    IsNullWithNoneAsRHS, Player, Season, Tag,
 )
 
 
@@ -193,6 +194,22 @@ class LookupTests(TestCase):
         msg = "in_bulk()'s field_name must be a unique field but 'author' isn't."
         with self.assertRaisesMessage(ValueError, msg):
             Article.objects.in_bulk([self.au1], field_name='author')
+
+    def test_in_bulk_with_unique_constraint(self):
+        obj = InBulkUniqueConstraint.objects.create(slug='unique-slug')
+        self.assertEqual(
+            InBulkUniqueConstraint.objects.in_bulk(['unique-slug'], field_name='slug'),
+            {'unique-slug': obj},
+        )
+
+    def test_in_bulk_with_composite_unique_constraint(self):
+        for field_name in ('first_name', 'last_name'):
+            with self.subTest(field_name=field_name), self.assertRaises(ValueError):
+                InBulkUniqueConstraint.objects.in_bulk(field_name=field_name)
+
+    def test_in_bulk_with_conditional_unique_constraint(self):
+        with self.assertRaises(ValueError):
+            InBulkUniqueConstraint.objects.in_bulk(field_name='conditional_slug')
 
     def test_values(self):
         # values() returns a list of dictionaries instead of object instances --

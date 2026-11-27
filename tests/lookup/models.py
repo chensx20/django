@@ -37,6 +37,25 @@ class Article(models.Model):
         return self.headline
 
 
+class InBulkUniqueConstraint(models.Model):
+    slug = models.CharField(max_length=100)
+    first_name = models.CharField(max_length=100)
+    last_name = models.CharField(max_length=100)
+    conditional_slug = models.CharField(max_length=100)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=['slug'], name='in_bulk_slug_uniq'),
+            models.UniqueConstraint(
+                fields=['first_name', 'last_name'], name='in_bulk_name_uniq',
+            ),
+            models.UniqueConstraint(
+                fields=['conditional_slug'], condition=models.Q(first_name='Django'),
+                name='in_bulk_conditional_slug_uniq',
+            ),
+        ]
+
+
 class Tag(models.Model):
     articles = models.ManyToManyField(Article)
     name = models.CharField(max_length=100)
