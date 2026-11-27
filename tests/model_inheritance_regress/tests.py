@@ -11,10 +11,12 @@ from django.test import TestCase
 from .models import (
     ArticleWithAuthor, BachelorParty, BirthdayParty, BusStation, Child,
     Congressman, DerivedM, InternalCertificationAudit, ItalianRestaurant,
-    M2MChild, MessyBachelorParty, ParkingLot, ParkingLot3, ParkingLot4A,
-    ParkingLot4B, Person, Place, Politician, Profile, QualityControl,
-    Restaurant, SelfRefChild, SelfRefParent, Senator, Supplier, TrainStation,
-    User, Wholesaler,
+    M2MChild, MessyBachelorParty, MultipleParentLinks,
+    MultipleParentLinksReversed, MultipleParentLinksReversedWithPK,
+    MultipleParentLinksWithPK, OrdinaryLinkOnly, ParkingLot, ParkingLot3,
+    ParkingLot4A, ParkingLot4B, Person, Place, Politician, Profile,
+    QualityControl, Restaurant, SelfRefChild, SelfRefParent, Senator, Supplier,
+    TrainStation, User, Wholesaler,
 )
 
 
@@ -300,10 +302,40 @@ class ModelInheritanceTest(TestCase):
         )
 
         self.assertEqual(ParkingLot4B._meta.pk.name, "parent")
-        ParkingLot4A.objects.create(
+        ParkingLot4B.objects.create(
             name="Parking4B",
             address='21 Jump Street',
         )
+
+    def test_multiple_one_to_one_fields_to_parent(self):
+        for model in (MultipleParentLinks, MultipleParentLinksReversed):
+            self.assertIs(model._meta.parents[Place], model._meta.get_field('parent_link'))
+            self.assertIs(model._meta.pk, model._meta.get_field('parent_link'))
+            self.assertIs(model._meta.get_field('ordinary_link').remote_field.parent_link, False)
+
+        for model in (MultipleParentLinksWithPK, MultipleParentLinksReversedWithPK):
+            self.assertIs(model._meta.parents[Place], model._meta.get_field('parent_link'))
+            self.assertEqual(model._meta.pk.name, 'child_id')
+            self.assertIs(model._meta.get_field('ordinary_link').remote_field.parent_link, False)
+
+    def test_ordinary_one_to_one_to_parent_gets_automatic_parent_link(self):
+        parent_link = OrdinaryLinkOnly._meta.parents[Place]
+        self.assertEqual(parent_link.name, 'place_ptr')
+        self.assertIs(parent_link.remote_field.parent_link, True)
+        self.assertIs(OrdinaryLinkOnly._meta.pk, parent_link)
+        self.assertIs(OrdinaryLinkOnly._meta.get_field('ordinary_link').remote_field.parent_link, False)
+
+    def test_multiple_one_to_one_fields_to_parent_persistence(self):
+        parent = Place.objects.create(name='Parent', address='Parent address')
+        related = Place.objects.create(name='Related', address='Related address')
+        child = MultipleParentLinks.objects.create(
+            name='Child', address='Child address', parent_link=parent, ordinary_link=related,
+        )
+
+        child = MultipleParentLinks.objects.select_related('parent_link', 'ordinary_link').get(pk=child.pk)
+        self.assertEqual(child.name, 'Child')
+        self.assertEqual(child.parent_link, parent)
+        self.assertEqual(child.ordinary_link, related)
 
     def test_all_fields_from_abstract_base_class(self):
         """
