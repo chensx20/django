@@ -2,6 +2,7 @@ import threading
 from datetime import datetime, timedelta
 from unittest import mock
 
+from django.core import management
 from django.core.exceptions import MultipleObjectsReturned, ObjectDoesNotExist
 from django.db import DEFAULT_DB_ALIAS, DatabaseError, connections, models
 from django.db.models.manager import BaseManager
@@ -138,6 +139,26 @@ class ModelInstanceCreationTests(TestCase):
         # An UPDATE attempt is skipped when a primary key has default.
         with self.assertNumQueries(1):
             PrimaryKeyWithDefault().save()
+
+    def test_save_explicit_primary_key_with_default(self):
+        obj = PrimaryKeyWithDefault.objects.create()
+        primary_key = obj.pk
+        updated = PrimaryKeyWithDefault(pk=obj.pk)
+        updated.save()
+        self.assertEqual(PrimaryKeyWithDefault.objects.count(), 1)
+        self.assertEqual(updated.pk, primary_key)
+
+    def test_save_explicit_primary_key_without_default(self):
+        article = Article.objects.create(pub_date=datetime(2014, 5, 16))
+        updated = Article(id=article.pk, headline='Updated', pub_date=article.pub_date)
+        updated.save()
+        self.assertEqual(Article.objects.count(), 1)
+        self.assertEqual(Article.objects.get(pk=article.pk).headline, 'Updated')
+
+    def test_repeated_fixture_loading_with_default_primary_key(self):
+        management.call_command('loaddata', 'primary_key_with_default', verbosity=0)
+        management.call_command('loaddata', 'primary_key_with_default', verbosity=0)
+        self.assertEqual(PrimaryKeyWithDefault.objects.count(), 1)
 
 
 class ModelTest(TestCase):
