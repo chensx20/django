@@ -200,6 +200,7 @@ class Field:
         memo[id(self)] = result
         result.widget = copy.deepcopy(self.widget, memo)
         result.validators = self.validators[:]
+        result.error_messages = self.error_messages.copy()
         return result
 
 
