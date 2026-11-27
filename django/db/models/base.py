@@ -569,6 +569,9 @@ class Model(metaclass=ModelBase):
         return getattr(self, meta.pk.attname)
 
     def _set_pk_val(self, value):
+        if value is None:
+            for parent in self._meta.get_parent_list():
+                setattr(self, parent._meta.pk.attname, None)
         return setattr(self, self._meta.pk.attname, value)
 
     pk = property(_get_pk_val, _set_pk_val)
@@ -806,7 +809,10 @@ class Model(metaclass=ModelBase):
             # Make sure the link fields are synced between parent and self.
             if (field and getattr(self, parent._meta.pk.attname) is None and
                     getattr(self, field.attname) is not None):
-                setattr(self, parent._meta.pk.attname, getattr(self, field.attname))
+                if not self._state.adding and parent._meta.pk.attname in self.__dict__:
+                    setattr(self, field.attname, None)
+                else:
+                    setattr(self, parent._meta.pk.attname, getattr(self, field.attname))
             parent_inserted = self._save_parents(cls=parent, using=using, update_fields=update_fields)
             updated = self._save_table(
                 cls=parent, using=using, update_fields=update_fields,

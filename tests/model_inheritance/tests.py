@@ -6,9 +6,9 @@ from django.test import SimpleTestCase, TestCase
 from django.test.utils import CaptureQueriesContext, isolate_apps
 
 from .models import (
-    Base, Chef, CommonInfo, GrandChild, GrandParent, ItalianRestaurant,
-    MixinModel, ParkingLot, Place, Post, Restaurant, Student, SubBase,
-    Supplier, Title, Worker,
+    Base, Chef, CommonInfo, Derived, FurtherDerived, GrandChild, GrandParent,
+    ItalianRestaurant, Item, MixinModel, ParkingLot, Place, Post, Restaurant,
+    Student, SubBase, Supplier, Title, Worker,
 )
 
 
@@ -148,6 +148,47 @@ class ModelInheritanceTests(TestCase):
                 for query in queries:
                     sql = query['sql']
                     self.assertIn('INSERT INTO', sql, sql)
+
+    def test_reset_inherited_pk(self):
+        original = FurtherDerived.objects.create(
+            name='original', description='original derived', extra='original extra',
+        )
+        duplicate = FurtherDerived.objects.get(pk=original.pk)
+        duplicate.pk = None
+        duplicate.name = 'new'
+        duplicate.description = 'new derived'
+        duplicate.extra = 'new extra'
+        duplicate.save()
+
+        self.assertNotEqual(duplicate.pk, original.pk)
+        self.assertEqual(
+            list(Item.objects.order_by('uid').values_list('name', flat=True)),
+            ['original', 'new'],
+        )
+        self.assertEqual(
+            list(Derived.objects.order_by('item_ptr_id').values_list('description', flat=True)),
+            ['original derived', 'new derived'],
+        )
+        self.assertEqual(
+            list(FurtherDerived.objects.order_by('derived_ptr_id').values_list('extra', flat=True)),
+            ['original extra', 'new extra'],
+        )
+        self.assertEqual(duplicate.uid, duplicate.item_ptr_id)
+        self.assertEqual(duplicate.item_ptr_id, duplicate.derived_ptr_id)
+
+    def test_reset_inherited_pk_via_reverse_accessor(self):
+        original = Derived.objects.create(name='original', description='original derived')
+        duplicate = Item.objects.get(pk=original.pk).derived
+        duplicate.uid = None
+        duplicate.name = 'new'
+        duplicate.description = 'new derived'
+        duplicate.save()
+
+        self.assertNotEqual(duplicate.pk, original.pk)
+        original.refresh_from_db()
+        self.assertEqual((original.name, original.description), ('original', 'original derived'))
+        self.assertEqual(Item.objects.count(), 2)
+        self.assertEqual(Derived.objects.count(), 2)
 
     def test_eq(self):
         # Equality doesn't transfer in multitable inheritance.
