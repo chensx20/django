@@ -4,6 +4,7 @@ import ipaddress
 import uuid
 
 from django.db import models
+from django.template import Context, Engine
 from django.test import SimpleTestCase
 from django.utils.functional import Promise
 from django.utils.translation import gettext_lazy as _
@@ -41,6 +42,16 @@ class Gender(models.TextChoices):
 
 
 class ChoicesTests(SimpleTestCase):
+    def test_template_enum_member(self):
+        template = Engine().from_string(
+            '{% if year == YearInSchool.FRESHMAN %}{{ YearInSchool.FRESHMAN }}{% endif %}'
+        )
+        context = Context({
+            'year': YearInSchool.FRESHMAN,
+            'YearInSchool': YearInSchool,
+        })
+        self.assertEqual(template.render(context), 'FR')
+
     def test_integerchoices(self):
         self.assertEqual(Suit.choices, [(1, 'Diamond'), (2, 'Spade'), (3, 'Heart'), (4, 'Club')])
         self.assertEqual(Suit.labels, ['Diamond', 'Spade', 'Heart', 'Club'])
