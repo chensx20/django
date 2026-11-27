@@ -7,7 +7,7 @@ from django.forms.widgets import CheckboxSelectMultiple
 from django.template import Context, Template
 from django.test import TestCase
 
-from .models import Article, Author, Book, Category, Writer
+from .models import Article, Author, Award, Book, Category, Writer
 
 
 class ModelChoiceFieldTests(TestCase):
@@ -183,6 +183,26 @@ class ModelChoiceFieldTests(TestCase):
         template = Template('{{ field.name }}{{ field }}{{ field.help_text }}')
         with self.assertNumQueries(1):
             template.render(Context({'field': field}))
+
+    def test_model_form_radioselect_respects_foreignkey_blank(self):
+        """Required FK radios omit the blank choice; optional ones retain it."""
+        class RequiredRadioForm(forms.ModelForm):
+            class Meta:
+                model = Award
+                fields = ['character']
+                widgets = {'character': forms.RadioSelect}
+
+        class OptionalRadioForm(forms.ModelForm):
+            class Meta:
+                model = Book
+                fields = ['author']
+                widgets = {'author': forms.RadioSelect}
+
+        required_form = RequiredRadioForm()
+        optional_form = OptionalRadioForm()
+
+        self.assertNotIn('value=""', required_form['character'].as_widget())
+        self.assertIn('value=""', optional_form['author'].as_widget())
 
     def test_disabled_modelchoicefield(self):
         class ModelChoiceForm(forms.ModelForm):
