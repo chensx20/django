@@ -11,7 +11,9 @@ from django.core.management import call_command
 from django.db import IntegrityError, connection, models
 from django.db.models.expressions import RawSQL
 from django.db.models.functions import Cast
-from django.test import TransactionTestCase, modify_settings, override_settings
+from django.test import (
+    SimpleTestCase, TransactionTestCase, modify_settings, override_settings,
+)
 from django.test.utils import isolate_apps
 from django.utils import timezone
 
@@ -925,6 +927,27 @@ class TestSimpleFormField(PostgreSQLSimpleTestCase):
         self.assertIs(field.has_changed(None, []), False)
         self.assertIs(field.has_changed([], None), False)
         self.assertIs(field.has_changed([], ''), False)
+
+
+class TestSplitFormFieldRendering(SimpleTestCase):
+
+    # To locate the widget's template.
+    @modify_settings(INSTALLED_APPS={'append': 'django.contrib.postgres'})
+    def test_boolean_field_initial(self):
+        class SplitForm(forms.Form):
+            array = SplitArrayField(forms.BooleanField(), size=3)
+
+        form = SplitForm(initial={'array': [True, False, False]})
+        self.assertHTMLEqual(str(form), '''
+            <tr>
+                <th><label for="id_array_0">Array:</label></th>
+                <td>
+                    <input id="id_array_0" name="array_0" type="checkbox" required checked>
+                    <input id="id_array_1" name="array_1" type="checkbox" required>
+                    <input id="id_array_2" name="array_2" type="checkbox" required>
+                </td>
+            </tr>
+        ''')
 
 
 class TestSplitFormField(PostgreSQLSimpleTestCase):
