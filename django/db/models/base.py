@@ -414,6 +414,13 @@ class Model(metaclass=ModelBase):
 
         # Set up the storage for instance state
         self._state = ModelState()
+        pk_field = opts.pk
+        pk_field_index = opts.concrete_fields.index(pk_field)
+        pk_value_supplied = (
+            len(args) > pk_field_index and args[pk_field_index] is not _DEFERRED and
+            args[pk_field_index] is not None
+        ) or kwargs.get('pk', kwargs.get(pk_field.attname, kwargs.get(pk_field.name))) is not None
+        self._state.pk_value_supplied = pk_value_supplied
 
         # There is a rather weird disparity here; if kwargs, it's set, then args
         # overrides it. It should be one or the other; don't duplicate the work
@@ -851,6 +858,7 @@ class Model(metaclass=ModelBase):
         if (
             not force_insert and
             self._state.adding and
+            not self._state.pk_value_supplied and
             self._meta.pk.default and
             self._meta.pk.default is not NOT_PROVIDED
         ):
