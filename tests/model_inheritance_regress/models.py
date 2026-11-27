@@ -44,6 +44,32 @@ class ParkingLot3(Place):
     parent = models.OneToOneField(Place, models.CASCADE, parent_link=True)
 
 
+class MultipleParentLinks(Place):
+    parent_link = models.OneToOneField(Place, models.CASCADE, parent_link=True, related_name='+')
+    ordinary_link = models.OneToOneField(Place, models.CASCADE, related_name='+')
+
+
+class MultipleParentLinksReversed(Place):
+    ordinary_link = models.OneToOneField(Place, models.CASCADE, related_name='+')
+    parent_link = models.OneToOneField(Place, models.CASCADE, parent_link=True, related_name='+')
+
+
+class MultipleParentLinksWithPK(Place):
+    parent_link = models.OneToOneField(Place, models.CASCADE, parent_link=True, related_name='+')
+    ordinary_link = models.OneToOneField(Place, models.CASCADE, related_name='+')
+    child_id = models.AutoField(primary_key=True)
+
+
+class MultipleParentLinksReversedWithPK(Place):
+    ordinary_link = models.OneToOneField(Place, models.CASCADE, related_name='+')
+    parent_link = models.OneToOneField(Place, models.CASCADE, parent_link=True, related_name='+')
+    child_id = models.AutoField(primary_key=True)
+
+
+class OrdinaryLinkOnly(Place):
+    ordinary_link = models.OneToOneField(Place, models.CASCADE, related_name='+')
+
+
 class ParkingLot4(models.Model):
     # Test parent_link connector can be discovered in abstract classes.
     parent = models.OneToOneField(Place, models.CASCADE, parent_link=True)
