@@ -266,6 +266,7 @@ class Field:
         result.widget = copy.deepcopy(self.widget, memo)
         result.error_messages = self.error_messages.copy()
         result.validators = self.validators[:]
+        result.error_messages = self.error_messages.copy()
         return result
 
     def _clean_bound_field(self, bf):
