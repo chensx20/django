@@ -175,7 +175,13 @@ def parse_http_date(date):
         raise ValueError("%r is not in a valid HTTP date format" % date)
     try:
         year = int(m.group('year'))
-        if year < 100:
+        if regex is RFC850_DATE:
+            current_year = datetime.datetime.utcnow().year
+            year += current_year // 100 * 100
+            # RFC7231 rolls back years more than 50 years in the future.
+            if year > current_year + 50:
+                year -= 100
+        elif year < 100:
             if year < 70:
                 year += 2000
             else:
