@@ -14,7 +14,9 @@ from django.contrib.admin.tests import AdminSeleniumTestCase
 from django.contrib.auth.models import User
 from django.core.files.storage import default_storage
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.db.models import CharField, DateField, DateTimeField, UUIDField
+from django.db.models import (
+    CharField, DateField, DateTimeField, ManyToManyField, UUIDField,
+)
 from django.test import SimpleTestCase, TestCase, override_settings
 from django.urls import reverse
 from django.utils import translation
@@ -116,6 +118,25 @@ class AdminFormfieldForDBFieldTests(SimpleTestCase):
     def test_filtered_many_to_many(self):
         self.assertFormfield(Band, 'members', widgets.FilteredSelectMultiple,
                              filter_vertical=['members'])
+
+    def test_formfield_overrides_for_many_to_many_field(self):
+        class BandAdmin(admin.ModelAdmin):
+            formfield_overrides = {ManyToManyField: {'widget': forms.SelectMultiple}}
+            filter_horizontal = ['members']
+
+        ma = BandAdmin(Band, admin.site)
+        ff = ma.formfield_for_dbfield(Band._meta.get_field('members'), request=None)
+        self.assertIsInstance(ff.widget.widget, forms.SelectMultiple)
+
+    def test_formfield_for_many_to_many_preserves_widget(self):
+        class BandAdmin(admin.ModelAdmin):
+            raw_id_fields = ['members']
+
+        ma = BandAdmin(Band, admin.site)
+        ff = ma.formfield_for_manytomany(
+            Band._meta.get_field('members'), request=None, widget=forms.SelectMultiple,
+        )
+        self.assertIsInstance(ff.widget, forms.SelectMultiple)
 
     def test_formfield_overrides(self):
         self.assertFormfield(Event, 'start_date', forms.TextInput,
