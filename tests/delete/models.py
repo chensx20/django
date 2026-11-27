@@ -100,6 +100,19 @@ class User(models.Model):
     avatar = models.ForeignKey(Avatar, models.CASCADE, null=True)
 
 
+class DeletionTarget(models.Model):
+    pass
+
+
+class Entry(models.Model):
+    created_by = models.ForeignKey(DeletionTarget, models.CASCADE, related_name='created_entries')
+    updated_by = models.ForeignKey(DeletionTarget, models.CASCADE, related_name='updated_entries')
+
+
+class SelfReferentialM2M(models.Model):
+    related = models.ManyToManyField('self')
+
+
 class HiddenUser(models.Model):
     r = models.ForeignKey(R, models.CASCADE, related_name="+")
 
