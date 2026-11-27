@@ -194,3 +194,16 @@ class Child(Parent):
 
 class GrandChild(Child):
     pass
+
+
+class Item(models.Model):
+    uid = models.AutoField(primary_key=True)
+    name = models.CharField(max_length=50)
+
+
+class Derived(Item):
+    description = models.CharField(max_length=50)
+
+
+class FurtherDerived(Derived):
+    extra = models.CharField(max_length=50)
