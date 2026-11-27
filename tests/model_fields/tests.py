@@ -7,8 +7,8 @@ from django.test import SimpleTestCase, TestCase
 from django.utils.functional import lazy
 
 from .models import (
-    Bar, Choiceful, Foo, RenamedField, VerboseNameField, Whiz, WhizDelayed,
-    WhizIter, WhizIterEmpty,
+    Bar, Choiceful, CustomDisplay, CustomDisplayChild, Foo, RenamedField,
+    VerboseNameField, Whiz, WhizDelayed, WhizIter, WhizIterEmpty,
 )
 
 
@@ -149,6 +149,10 @@ class ChoicesTests(SimpleTestCase):
 
 
 class GetFieldDisplayTests(SimpleTestCase):
+
+    def test_overriding_FIELD_display(self):
+        self.assertEqual(CustomDisplay(c=1).get_c_display(), 'custom')
+        self.assertEqual(CustomDisplayChild(c=1).get_c_display(), 'First')
 
     def test_choices_and_field_display(self):
         """
