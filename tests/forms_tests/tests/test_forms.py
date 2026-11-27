@@ -8,11 +8,11 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core.validators import MaxValueValidator, RegexValidator
 from django.forms import (
     BooleanField, CharField, CheckboxSelectMultiple, ChoiceField, DateField,
-    DateTimeField, EmailField, FileField, FloatField, Form, HiddenInput,
-    ImageField, IntegerField, MultipleChoiceField, MultipleHiddenInput,
-    MultiValueField, NullBooleanField, PasswordInput, RadioSelect, Select,
-    SplitDateTimeField, SplitHiddenDateTimeWidget, Textarea, TextInput,
-    TimeField, ValidationError, forms,
+    DateTimeField, EmailField, FileField, FileInput, FloatField, Form,
+    HiddenInput, ImageField, IntegerField, MultipleChoiceField,
+    MultipleHiddenInput, MultiValueField, NullBooleanField, PasswordInput,
+    RadioSelect, Select, SplitDateTimeField, SplitHiddenDateTimeWidget,
+    Textarea, TextInput, TimeField, ValidationError, forms,
 )
 from django.forms.renderers import DjangoTemplates, get_default_renderer
 from django.forms.utils import ErrorList
@@ -2485,6 +2485,22 @@ Password: <input type="password" name="password" required>
         f = FileForm({})
         self.assertEqual(f.errors, {})
         self.assertEqual(f.cleaned_data['file1'], 'resume.txt')
+
+    def test_fileinput_required_attribute_with_initial(self):
+        class FileForm(Form):
+            file1 = FileField(widget=FileInput)
+
+        form = FileForm(auto_id=False)
+        self.assertHTMLEqual(
+            form.as_table(),
+            '<tr><th>File1:</th><td><input type="file" name="file1" required></td></tr>',
+        )
+
+        form = FileForm(initial={'file1': 'resume.txt'}, auto_id=False)
+        self.assertHTMLEqual(
+            form.as_table(),
+            '<tr><th>File1:</th><td><input type="file" name="file1"></td></tr>',
+        )
 
     def test_basic_processing_in_view(self):
         class UserRegistration(Form):
