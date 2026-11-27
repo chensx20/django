@@ -2,7 +2,7 @@ from datetime import datetime
 
 from django.core.exceptions import FieldError
 from django.db.models import CharField, F, Q
-from django.db.models.expressions import SimpleCol
+from django.db.models.expressions import Col, SimpleCol
 from django.db.models.fields.related_lookups import RelatedIsNull
 from django.db.models.functions import Lower
 from django.db.models.lookups import Exact, GreaterThan, IsNull, LessThan
@@ -15,6 +15,65 @@ from .models import Author, Item, ObjectC, Ranking
 
 
 class TestQuery(SimpleTestCase):
+    def test_resolve_lookup_value_preserves_list_and_tuple_types(self):
+        query = Query(Author)
+        for value in ([], (), [1, 2], (1, 2)):
+            with self.subTest(value=value):
+                resolved = query.resolve_lookup_value(value, None, True, False)
+                self.assertEqual(resolved, value)
+                self.assertIs(type(resolved), type(value))
+                if value:
+                    self.assertIsNot(resolved, value)
+
+    def test_resolve_lookup_value_recursively_resolves_expressions(self):
+        query = Query(Author)
+        value = [F('num'), (2, [F('num'), []]), ()]
+
+        resolved = query.resolve_lookup_value(value, None, True, False)
+
+        self.assertIsInstance(resolved, list)
+        self.assertIsInstance(resolved[1], tuple)
+        self.assertIsInstance(resolved[1][1], list)
+        self.assertIsInstance(resolved[1][1][1], list)
+        self.assertIsInstance(resolved[2], tuple)
+        self.assertEqual(resolved[1][0], 2)
+        self.assertIsInstance(resolved[0], Col)
+        self.assertIsInstance(resolved[1][1][0], Col)
+        self.assertIsInstance(value[0], F)
+        self.assertEqual(value[1][0], 2)
+        self.assertIsInstance(value[1][1][0], F)
+
+    def test_resolve_lookup_value_forwards_expression_context_recursively(self):
+        query = Query(Author)
+        can_reuse = {'existing_alias'}
+        calls = []
+
+        class Expression:
+            def resolve_expression(self, query, **kwargs):
+                calls.append((query, kwargs))
+                return 'resolved'
+
+        expression = Expression()
+
+        resolved = query.resolve_lookup_value(
+            [1, (expression,)], can_reuse, False, True,
+        )
+
+        self.assertEqual(resolved, [1, ('resolved',)])
+        self.assertEqual(calls, [(query, {'reuse': can_reuse, 'allow_joins': False})])
+
+    def test_resolve_lookup_value_passes_simple_col_to_f_expressions(self):
+        query = Query(Author)
+
+        resolved = query.resolve_lookup_value([[F('num')]], None, True, True)
+
+        self.assertIsInstance(resolved[0][0], SimpleCol)
+
+    def test_resolve_lookup_value_rejects_nested_joins_when_disallowed(self):
+        query = Query(Author)
+        with self.assertRaises(FieldError):
+            query.resolve_lookup_value([[F('extra__info')]], None, False, False)
+
     def test_simple_query(self):
         query = Query(Author)
         where = query.build_where(Q(num__gt=2))
