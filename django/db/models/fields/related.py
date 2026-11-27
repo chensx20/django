@@ -975,6 +975,11 @@ class ForeignKey(ForeignObject):
             raise ValueError("Cannot create form field for %r yet, because "
                              "its related model %r has not been loaded yet" %
                              (self.name, self.remote_field.model))
+        widget = kwargs.get('widget')
+        if 'empty_label' not in kwargs and not self.blank and widget is not None:
+            widget_class = widget if isinstance(widget, type) else type(widget)
+            if issubclass(widget_class, forms.RadioSelect):
+                kwargs['empty_label'] = None
         return super().formfield(**{
             'form_class': forms.ModelChoiceField,
             'queryset': self.remote_field.model._default_manager.using(using),
