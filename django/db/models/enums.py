@@ -8,6 +8,8 @@ __all__ = ['Choices', 'IntegerChoices', 'TextChoices']
 class ChoicesMeta(enum.EnumMeta):
     """A metaclass for creating a enum choices."""
 
+    do_not_call_in_templates = True
+
     def __new__(metacls, classname, bases, classdict):
         labels = []
         for key in classdict._member_names:
