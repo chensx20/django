@@ -236,11 +236,43 @@ class BulkCreateTests(TestCase):
         self.assertEqual(Restaurant.objects.count(), 501)
 
         TwoFields.objects.all().delete()
-        objs = [TwoFields(id=i + 1, f1=i, f2=i) for i in range(334)]
+        generated_objs = [TwoFields(f1=i, f2=i + 1) for i in range(500)]
         with self.assertNumQueries(2):
-            TwoFields.objects.bulk_create(objs, batch_size=334)
-        self.assertEqual(TwoFields.objects.count(), 334)
-        self.assertEqual(TwoFields.objects.order_by('id').last().f1, 333)
+            TwoFields.objects.bulk_create(generated_objs, batch_size=500)
+        generated_rows = list(
+            TwoFields.objects.order_by('f1').values_list('id', 'f1', 'f2')
+        )
+        self.assertEqual(len(generated_rows), 500)
+        self.assertTrue(all(pk is not None for pk, f1, f2 in generated_rows))
+        self.assertEqual(
+            [(f1, f2) for pk, f1, f2 in generated_rows],
+            [(i, i + 1) for i in range(500)],
+        )
+
+        TwoFields.objects.all().delete()
+        generated_objs = [TwoFields(f1=i, f2=i + 1) for i in range(500)]
+        explicit_objs = [
+            TwoFields(id=10001 + i, f1=1000 + i, f2=1001 + i)
+            for i in range(334)
+        ]
+        with self.assertNumQueries(4):
+            TwoFields.objects.bulk_create(generated_objs + explicit_objs, batch_size=501)
+        generated_rows = list(
+            TwoFields.objects.filter(f1__lt=500).order_by('f1').values_list('id', 'f1', 'f2')
+        )
+        explicit_rows = list(
+            TwoFields.objects.filter(f1__gte=1000).order_by('id').values_list('id', 'f1', 'f2')
+        )
+        self.assertEqual(len(generated_rows), 500)
+        self.assertTrue(all(pk is not None for pk, f1, f2 in generated_rows))
+        self.assertEqual(
+            [(f1, f2) for pk, f1, f2 in generated_rows],
+            [(i, i + 1) for i in range(500)],
+        )
+        self.assertEqual(
+            explicit_rows,
+            [(10001 + i, 1000 + i, 1001 + i) for i in range(334)],
+        )
 
     @skipUnlessDBFeature('has_bulk_insert')
     def test_bulk_insert_expressions(self):
