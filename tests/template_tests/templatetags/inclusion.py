@@ -118,6 +118,13 @@ def inclusion_two_params(one, two):
 inclusion_two_params.anything = "Expected inclusion_two_params __dict__"
 
 
+@register.inclusion_tag('inclusion.html')
+def inclusion_keyword_only_required_and_default(*, required, optional='default'):
+    return {
+        "result": "inclusion_keyword_only_required_and_default - Expected result: %s, %s" % (required, optional),
+    }
+
+
 @register.inclusion_tag(engine.get_template('inclusion.html'))
 def inclusion_two_params_from_template(one, two):
     """Expected inclusion_two_params_from_template __doc__"""
