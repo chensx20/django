@@ -1,5 +1,6 @@
 import unittest
 from datetime import datetime
+from unittest.mock import patch
 
 from django.test import SimpleTestCase, ignore_warnings
 from django.utils.datastructures import MultiValueDict
@@ -317,8 +318,35 @@ class HttpDateProcessingTests(unittest.TestCase):
         self.assertEqual(datetime.utcfromtimestamp(parsed), datetime(1994, 11, 6, 8, 49, 37))
 
     def test_parsing_rfc850(self):
-        parsed = parse_http_date('Sunday, 06-Nov-94 08:49:37 GMT')
+        with patch('django.utils.http.datetime.datetime') as mocked_datetime:
+            mocked_datetime.utcnow.return_value = datetime(2026, 1, 1)
+            mocked_datetime.side_effect = datetime
+            parsed = parse_http_date('Sunday, 06-Nov-94 08:49:37 GMT')
         self.assertEqual(datetime.utcfromtimestamp(parsed), datetime(1994, 11, 6, 8, 49, 37))
+
+    def test_parsing_rfc850_rolling_year(self):
+        test_cases = (
+            (2020, '69', 2069),
+            (2020, '70', 2070),
+            (2020, '71', 1971),
+            (2019, '70', 1970),
+            (2069, '94', 2094),
+            (2100, '00', 2100),
+            (2100, '50', 2150),
+            (2100, '51', 2051),
+        )
+        for current_year, year_suffix, expected_year in test_cases:
+            with self.subTest(current_year=current_year, year_suffix=year_suffix):
+                with patch('django.utils.http.datetime.datetime') as mocked_datetime:
+                    mocked_datetime.utcnow.return_value = datetime(current_year, 1, 1)
+                    mocked_datetime.side_effect = datetime
+                    parsed = parse_http_date(
+                        'Sunday, 06-Nov-%s 08:49:37 GMT' % year_suffix
+                    )
+                self.assertEqual(
+                    datetime.utcfromtimestamp(parsed).year,
+                    expected_year,
+                )
 
     def test_parsing_asctime(self):
         parsed = parse_http_date('Sun Nov  6 08:49:37 1994')
