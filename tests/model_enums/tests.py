@@ -48,6 +48,7 @@ class ChoicesTests(SimpleTestCase):
         self.assertEqual(Suit.names, ['DIAMOND', 'SPADE', 'HEART', 'CLUB'])
 
         self.assertEqual(repr(Suit.DIAMOND), '<Suit.DIAMOND: 1>')
+        self.assertEqual(str(Suit.DIAMOND), '1')
         self.assertEqual(Suit.DIAMOND.label, 'Diamond')
         self.assertEqual(Suit.DIAMOND.value, 1)
         self.assertEqual(Suit['DIAMOND'], Suit.DIAMOND)
@@ -89,6 +90,7 @@ class ChoicesTests(SimpleTestCase):
         self.assertEqual(YearInSchool.names, ['FRESHMAN', 'SOPHOMORE', 'JUNIOR', 'SENIOR', 'GRADUATE'])
 
         self.assertEqual(repr(YearInSchool.FRESHMAN), "<YearInSchool.FRESHMAN: 'FR'>")
+        self.assertEqual(str(YearInSchool.FRESHMAN), 'FR')
         self.assertEqual(YearInSchool.FRESHMAN.label, 'Freshman')
         self.assertEqual(YearInSchool.FRESHMAN.value, 'FR')
         self.assertEqual(YearInSchool['FRESHMAN'], YearInSchool.FRESHMAN)
