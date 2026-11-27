@@ -60,6 +60,20 @@ class WhizDelayed(models.Model):
 WhizDelayed._meta.get_field('c').choices = Whiz.CHOICES
 
 
+class CustomDisplay(models.Model):
+    c = models.IntegerField(choices=Whiz.CHOICES)
+
+    def get_c_display(self):
+        return 'custom'
+
+    class Meta:
+        abstract = True
+
+
+class CustomDisplayChild(CustomDisplay):
+    c = models.IntegerField(choices=Whiz.CHOICES)
+
+
 class WhizIter(models.Model):
     c = models.IntegerField(choices=iter(Whiz.CHOICES), null=True)
 
