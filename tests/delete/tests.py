@@ -6,9 +6,10 @@ from django.db.models.sql.constants import GET_ITERATOR_CHUNK_SIZE
 from django.test import TestCase, skipIfDBFeature, skipUnlessDBFeature
 
 from .models import (
-    MR, A, Avatar, Base, Child, HiddenUser, HiddenUserProfile, M, M2MFrom,
-    M2MTo, MRNull, Origin, Parent, R, RChild, RChildChild, Referrer, S, T,
-    User, create_a, get_default_r,
+    MR, A, Avatar, Base, Child, DeletionTarget, Entry, HiddenUser,
+    HiddenUserProfile, M, M2MFrom, M2MTo, MRNull, Origin, Parent, R, RChild,
+    RChildChild, Referrer, S, SelfReferentialM2M, T, User, create_a,
+    get_default_r,
 )
 
 
@@ -490,6 +491,46 @@ class DeletionTests(TestCase):
 
 
 class FastDeleteTests(TestCase):
+
+    def test_fast_delete_multiple_foreign_keys(self):
+        target = DeletionTarget.objects.create()
+        Entry.objects.create(created_by=target, updated_by=target)
+        Entry.objects.create(created_by=target, updated_by=DeletionTarget.objects.create())
+        with self.assertNumQueries(2):
+            target.delete()
+        self.assertFalse(Entry.objects.filter(created_by=target).exists())
+
+    def test_fast_delete_multiple_foreign_keys_large_batch(self):
+        targets = [DeletionTarget.objects.create() for i in range(501)]
+        Entry.objects.bulk_create(
+            Entry(created_by=target, updated_by=target) for target in targets
+        )
+        with self.assertNumQueries(9):
+            DeletionTarget.objects.all().delete()
+        self.assertFalse(Entry.objects.exists())
+
+    def test_fast_delete_multiple_foreign_keys_with_signals(self):
+        target = DeletionTarget.objects.create()
+        entry = Entry.objects.create(created_by=target, updated_by=target)
+        received = []
+
+        def receiver(sender, instance, **kwargs):
+            received.append(instance.pk)
+
+        models.signals.pre_delete.connect(receiver, sender=Entry, weak=False)
+        try:
+            target.delete()
+        finally:
+            models.signals.pre_delete.disconnect(receiver, sender=Entry)
+        self.assertEqual(received, [entry.pk])
+
+    def test_fast_delete_self_referential_m2m(self):
+        first = SelfReferentialM2M.objects.create()
+        second = SelfReferentialM2M.objects.create()
+        first.related.add(second)
+        with self.assertNumQueries(2):
+            first.delete()
+        self.assertFalse(SelfReferentialM2M.related.through.objects.exists())
 
     def test_fast_delete_fk(self):
         u = User.objects.create(
