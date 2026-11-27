@@ -176,6 +176,17 @@ class UtilsTests(SimpleTestCase):
         display_value = display_for_field(None, models.FloatField(), self.empty_value)
         self.assertEqual(display_value, self.empty_value)
 
+    def test_jsonfield_display_for_field(self):
+        display_value = display_for_field(None, models.JSONField(), self.empty_value)
+        self.assertEqual(display_value, self.empty_value)
+
+        display_value = display_for_field({'foo': 'bar'}, models.JSONField(), self.empty_value)
+        self.assertEqual(display_value, '{"foo": "bar"}')
+
+        invalid_value = forms.JSONField().bound_data('{invalid', None)
+        display_value = display_for_field(invalid_value, models.JSONField(), self.empty_value)
+        self.assertEqual(display_value, '{invalid')
+
     def test_number_formats_display_for_field(self):
         display_value = display_for_field(12345.6789, models.FloatField(), self.empty_value)
         self.assertEqual(display_value, '12345.6789')
