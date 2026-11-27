@@ -1,4 +1,5 @@
 from operator import attrgetter
+from unittest.mock import patch
 
 from django.db import IntegrityError, NotSupportedError, connection
 from django.db.models import FileField, Value
@@ -213,6 +214,33 @@ class BulkCreateTests(TestCase):
         TwoFields.objects.all().delete()
         with self.assertNumQueries(1):
             TwoFields.objects.bulk_create(objs, len(objs))
+
+    @skipUnlessDBFeature('has_bulk_insert')
+    def test_explicit_batch_size_respects_backend_limit(self):
+        objs = [TwoFields(f1=i, f2=i) for i in range(5)]
+        with patch.object(connection.ops, 'bulk_batch_size', return_value=2):
+            with self.assertNumQueries(3):
+                TwoFields.objects.bulk_create(objs, batch_size=10)
+        self.assertEqual(
+            list(TwoFields.objects.order_by('f1').values_list('f1', 'f2')),
+            [(i, i) for i in range(5)],
+        )
+
+    @skipUnlessDBFeature('has_bulk_insert')
+    def test_explicit_batch_size_respects_sqlite_backend_limit(self):
+        if connection.vendor != 'sqlite':
+            self.skipTest('SQLite-specific bulk batch size')
+        objs = [Restaurant(name='restaurant %s' % i) for i in range(501)]
+        with self.assertNumQueries(2):
+            Restaurant.objects.bulk_create(objs, batch_size=501)
+        self.assertEqual(Restaurant.objects.count(), 501)
+
+        TwoFields.objects.all().delete()
+        objs = [TwoFields(id=i + 1, f1=i, f2=i) for i in range(334)]
+        with self.assertNumQueries(2):
+            TwoFields.objects.bulk_create(objs, batch_size=334)
+        self.assertEqual(TwoFields.objects.count(), 334)
+        self.assertEqual(TwoFields.objects.order_by('id').last().f1, 333)
 
     @skipUnlessDBFeature('has_bulk_insert')
     def test_bulk_insert_expressions(self):
