@@ -44,6 +44,10 @@ class TestUtils(AdminDocsSimpleTestCase):
         )
         self.assertEqual(trim_docstring_output, trimmed_docstring)
 
+    def test_trim_docstring_with_nonblank_first_line(self):
+        docstring = 'First line\n    Indented continuation'
+        self.assertEqual(trim_docstring(docstring), 'First line\nIndented continuation')
+
     def test_parse_docstring(self):
         title, description, metadata = parse_docstring(self.docstring)
         docstring_title = (
